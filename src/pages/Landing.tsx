@@ -45,6 +45,13 @@ export default function Landing() {
         </div>
       </header>
 
+      <section className="stats-strip">
+        <div><b>2,400+</b><span>notes summarised</span></div>
+        <div><b>17%→6%</b><span>no-show reduction</span></div>
+        <div><b>5 min</b><span>to write up a session</span></div>
+        <div><b>100%</b><span>UK/EU data residency</span></div>
+      </section>
+
       <section className="section" id="features">
         <h2>Everything a small clinic needs</h2>
         <p className="sub">One tool for the clinician side and the client side — role-gated, secure, and refreshingly simple.</p>
@@ -56,6 +63,23 @@ export default function Landing() {
               <p>{f.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <h2>From notes to insight in three steps</h2>
+        <p className="sub">No new workflow to learn — paste what you already write.</p>
+        <div className="steps">
+          <div className="step"><span className="num">1</span><h3>Write your notes</h3><p>Type or paste your session notes as you always have.</p></div>
+          <div className="step"><span className="num">2</span><h3>Generate a draft</h3><p>Get a structured summary, a “what changed” recap, or a prep brief.</p></div>
+          <div className="step"><span className="num">3</span><h3>Review &amp; own it</h3><p>You check and edit the draft — it’s a drafting aid, not clinical advice.</p></div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="quote">
+          <p>“It gives me back the hour I used to spend writing up sessions — and my clients love the wellbeing companion between appointments.”</p>
+          <div className="who"><span className="av">PS</span> Dr Priya Sharma · Edgbaston Wellbeing Practice</div>
         </div>
       </section>
 
