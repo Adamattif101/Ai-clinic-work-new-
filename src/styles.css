@@ -84,3 +84,6 @@ button:disabled { opacity: 0.6; cursor: default; }
 .crisis-banner a { color: var(--error); font-weight: 700; }
 
 .chapter-head { width: 100%; text-align: left; }
+
+.spark { display: flex; align-items: flex-end; gap: 8px; height: 100px; margin-top: 0.5rem; }
+.spark-bar { width: 28px; background: var(--teal); border-radius: 4px 4px 0 0; }

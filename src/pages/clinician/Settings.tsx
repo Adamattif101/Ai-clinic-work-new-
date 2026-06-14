@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../lib/auth';
+import { DEMO_MODE, demoClinic } from '../../lib/demo';
 
 // Compliance settings: the clinic (data controller) manages DPA acceptance,
 // data region, retention, and data export here.
 export default function Settings() {
   const { profile } = useAuth();
-  const [clinic, setClinic] = useState<any>(null);
+  const [clinic, setClinic] = useState<any>(DEMO_MODE ? demoClinic : null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!profile) return;
+    if (DEMO_MODE || !profile) return;
     supabase
       .from('clinics')
       .select('*')

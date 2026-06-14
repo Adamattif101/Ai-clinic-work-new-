@@ -3,6 +3,7 @@ import { useAuth } from './lib/auth';
 import type { UserRole } from './lib/types';
 import { Layout } from './components/Layout';
 import SignIn from './pages/SignIn';
+import { DEMO_MODE } from './lib/demo';
 
 // Clinician/owner side
 import Dashboard from './pages/clinician/Dashboard';
@@ -16,9 +17,9 @@ import CompanionHome from './pages/patient/CompanionHome';
 import Journal from './pages/patient/Journal';
 import Homework from './pages/patient/Homework';
 
-// DEMO_MODE lets you browse the whole app WITHOUT signing in, so the site can
-// be viewed as a preview. Set to `false` to restore real login + role gating.
-const DEMO_MODE = true;
+// DEMO_MODE (from src/lib/demo.ts) lets you browse the whole app WITHOUT signing
+// in, with sample data, so the site works as a preview. Set it to `false` there
+// to restore real login + role gating.
 
 function RequireRole({
   roles,

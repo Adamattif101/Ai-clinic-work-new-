@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { detectCrisis } from '../../lib/crisisDetection';
 import { CrisisBanner } from '../../components/CrisisBanner';
+import { DEMO_MODE } from '../../lib/demo';
 
 // Journaling with the deterministic, non-LLM crisis layer IN FRONT of the
 // free-text input. If a crisis phrase is detected, we surface UK helpline
@@ -22,6 +23,12 @@ export default function Journal() {
     if (!text.trim()) return;
     const crisis = detectCrisis(text);
     if (crisis.flagged) setShowCrisis(true);
+
+    if (DEMO_MODE) {
+      setSaved(true);
+      setText('');
+      return;
+    }
 
     const { data: patient } = await supabase
       .from('patients')

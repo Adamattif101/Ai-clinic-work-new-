@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { DEMO_MODE, demoStats, demoMoodTrend } from '../../lib/demo';
 
 // Owner dashboard: caseload, utilisation, no-show rate, and self-reported
 // wellbeing engagement trends. Framed as ENGAGEMENT, not clinical severity.
@@ -11,9 +12,10 @@ interface Stats {
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<Stats | null>(DEMO_MODE ? demoStats : null);
 
   useEffect(() => {
+    if (DEMO_MODE) return;
     (async () => {
       const [{ count: caseload }, appts, checkins] = await Promise.all([
         supabase.from('patients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
@@ -59,6 +61,18 @@ export default function Dashboard() {
           hint="Self-reported engagement, not a clinical scale"
         />
       </div>
+
+      {DEMO_MODE && (
+        <section className="card" style={{ marginTop: '1.5rem' }}>
+          <h2>Wellbeing engagement trend</h2>
+          <p className="muted">Average self-reported check-in across recent weeks.</p>
+          <div className="spark">
+            {demoMoodTrend.map((m, i) => (
+              <div key={i} className="spark-bar" style={{ height: `${m * 18}px` }} title={`${m}/5`} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
