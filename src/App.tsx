@@ -16,6 +16,10 @@ import CompanionHome from './pages/patient/CompanionHome';
 import Journal from './pages/patient/Journal';
 import Homework from './pages/patient/Homework';
 
+// DEMO_MODE lets you browse the whole app WITHOUT signing in, so the site can
+// be viewed as a preview. Set to `false` to restore real login + role gating.
+const DEMO_MODE = true;
+
 function RequireRole({
   roles,
   children,
@@ -24,6 +28,7 @@ function RequireRole({
   children: JSX.Element;
 }) {
   const { session, profile, loading } = useAuth();
+  if (DEMO_MODE) return children; // preview: skip auth entirely
   if (loading) return <div className="centered">Loading…</div>;
   if (!session) return <Navigate to="/signin" replace />;
   if (profile && !roles.includes(profile.role)) {
@@ -42,7 +47,7 @@ export default function App() {
       <Route
         path="/"
         element={
-          session ? (
+          DEMO_MODE || session ? (
             <Navigate
               to={profile?.role === 'patient' ? '/companion' : '/dashboard'}
               replace
