@@ -33,7 +33,7 @@ export default function Clients() {
             <tr key={p.id}>
               <td>{p.full_name}</td>
               <td>{p.email}</td>
-              <td>{p.status}</td>
+              <td><span className="badge">{p.status}</span></td>
               <td>
                 <Link to={`/clients/${p.id}`}>Open</Link>
               </td>

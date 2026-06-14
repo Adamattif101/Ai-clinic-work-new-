@@ -3,6 +3,7 @@ import { useAuth } from './lib/auth';
 import type { UserRole } from './lib/types';
 import { Layout } from './components/Layout';
 import SignIn from './pages/SignIn';
+import Landing from './pages/Landing';
 import { DEMO_MODE } from './lib/demo';
 
 // Clinician/owner side
@@ -48,13 +49,14 @@ export default function App() {
       <Route
         path="/"
         element={
-          DEMO_MODE || session ? (
+          session && !DEMO_MODE ? (
             <Navigate
               to={profile?.role === 'patient' ? '/companion' : '/dashboard'}
               replace
             />
           ) : (
-            <Navigate to="/signin" replace />
+            // Public marketing landing page (also the demo entry point).
+            <Landing />
           )
         }
       />

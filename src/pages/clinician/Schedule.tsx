@@ -38,7 +38,11 @@ export default function Schedule() {
             <tr key={a.id}>
               {DEMO_MODE && <td>{nameFor(a.patient_id)}</td>}
               <td>{new Date(a.starts_at).toLocaleString('en-GB')}</td>
-              <td>{a.status}</td>
+              <td>
+                <span className={`badge${a.status === 'no_show' ? ' warn' : ''}`}>
+                  {a.status}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
