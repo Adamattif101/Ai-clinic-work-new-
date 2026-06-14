@@ -1,0 +1,19 @@
+# Supabase local config (excerpt). UK/EU region for hosted projects.
+project_id = "wellspring"
+
+[auth]
+enabled = true
+
+# Custom Access Token hook injects clinic_id + user_role JWT claims at login.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+[functions.notes-to-insight]
+verify_jwt = true
+
+[functions.crisis-check]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false  # verified via Stripe signature instead
