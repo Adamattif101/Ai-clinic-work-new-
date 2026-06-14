@@ -1,0 +1,2890 @@
+From d9638b3e9dc44ebee02609598f4012a98dfcb278 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 14 Jun 2026 11:52:27 +0000
+Subject: [PATCH] Scaffold Wellspring: multi-tenant clinic PWA with
+ notes-to-insight, RLS, compliance docs
+
+- React + TS PWA with role-gated clinician and patient experiences
+- Supabase migrations: core schema, clinical/admin tables, audit log, RLS on
+  every table with clinic_id JWT-claim isolation, custom access token auth hook,
+  and demo seed (one clinic, two clinicians, three patients)
+- Notes-to-insight Edge Function (server-side Claude, zero-retention, forbidden-
+  terms post-filter), plus Stripe webhook and GDPR data-export stubs
+- Deterministic non-LLM crisis-detection layer surfacing UK helplines
+- Compliance docs: DPA template, APD, DPIA skeleton, not-a-medical-device memo,
+  and migration plan
+- Unit tests for crisis detection and the not-a-medical-device guardrail
+---
+ .env.example                                  |  11 ++
+ .gitignore                                    |  14 ++
+ README.md                                     |  68 ++++++-
+ docs/compliance/DPA-template.md               |  83 +++++++++
+ docs/compliance/DPIA-skeleton.md              |  59 ++++++
+ .../compliance/appropriate-policy-document.md |  44 +++++
+ docs/compliance/not-a-medical-device.md       |  70 ++++++++
+ docs/migration-plan.md                        |  65 +++++++
+ eslint.config.js                              |  10 ++
+ index.html                                    |  18 ++
+ package.json                                  |  36 ++++
+ public/favicon.svg                            |   4 +
+ src/App.tsx                                   |  87 +++++++++
+ src/components/CrisisBanner.tsx               |  28 +++
+ src/components/Layout.tsx                     |  52 ++++++
+ src/lib/api.ts                                |  17 ++
+ src/lib/auth.tsx                              |  65 +++++++
+ src/lib/crisisDetection.ts                    |  46 +++++
+ src/lib/forbiddenTerms.ts                     |  23 +++
+ src/lib/supabaseClient.ts                     |  10 ++
+ src/lib/types.ts                              |  47 +++++
+ src/main.tsx                                  |  16 ++
+ src/pages/SignIn.tsx                          |  53 ++++++
+ src/pages/clinician/ClientDetail.tsx          | 131 ++++++++++++++
+ src/pages/clinician/Clients.tsx               |  44 +++++
+ src/pages/clinician/Dashboard.tsx             |  74 ++++++++
+ src/pages/clinician/Schedule.tsx              |  43 +++++
+ src/pages/clinician/Settings.tsx              |  81 +++++++++
+ src/pages/patient/CompanionHome.tsx           |  60 +++++++
+ src/pages/patient/Homework.tsx                |  39 ++++
+ src/pages/patient/Journal.tsx                 |  64 +++++++
+ src/styles.css                                |  86 +++++++++
+ src/vite-env.d.ts                             |  11 ++
+ supabase/config.toml                          |  19 ++
+ supabase/functions/_shared/cors.ts            |   6 +
+ supabase/functions/_shared/forbiddenTerms.ts  |  30 ++++
+ supabase/functions/data-export/index.ts       |  31 ++++
+ supabase/functions/notes-to-insight/index.ts  | 139 ++++++++++++++
+ supabase/functions/stripe-webhook/index.ts    |  57 ++++++
+ supabase/migrations/0001_core_schema.sql      |  75 ++++++++
+ supabase/migrations/0002_clinical_admin.sql   | 170 ++++++++++++++++++
+ supabase/migrations/0003_audit_log.sql        |  60 +++++++
+ supabase/migrations/0004_rls_policies.sql     |  95 ++++++++++
+ supabase/migrations/0005_auth_hook.sql        |  42 +++++
+ supabase/migrations/0006_seed.sql             |  88 +++++++++
+ tests/crisisDetection.test.ts                 |  21 +++
+ tests/forbiddenTerms.test.ts                  |  14 ++
+ tsconfig.json                                 |  25 +++
+ vite.config.ts                                |  46 +++++
+ 49 files changed, 2476 insertions(+), 1 deletion(-)
+ create mode 100644 .env.example
+ create mode 100644 .gitignore
+ create mode 100644 docs/compliance/DPA-template.md
+ create mode 100644 docs/compliance/DPIA-skeleton.md
+ create mode 100644 docs/compliance/appropriate-policy-document.md
+ create mode 100644 docs/compliance/not-a-medical-device.md
+ create mode 100644 docs/migration-plan.md
+ create mode 100644 eslint.config.js
+ create mode 100644 index.html
+ create mode 100644 package.json
+ create mode 100644 public/favicon.svg
+ create mode 100644 src/App.tsx
+ create mode 100644 src/components/CrisisBanner.tsx
+ create mode 100644 src/components/Layout.tsx
+ create mode 100644 src/lib/api.ts
+ create mode 100644 src/lib/auth.tsx
+ create mode 100644 src/lib/crisisDetection.ts
+ create mode 100644 src/lib/forbiddenTerms.ts
+ create mode 100644 src/lib/supabaseClient.ts
+ create mode 100644 src/lib/types.ts
+ create mode 100644 src/main.tsx
+ create mode 100644 src/pages/SignIn.tsx
+ create mode 100644 src/pages/clinician/ClientDetail.tsx
+ create mode 100644 src/pages/clinician/Clients.tsx
+ create mode 100644 src/pages/clinician/Dashboard.tsx
+ create mode 100644 src/pages/clinician/Schedule.tsx
+ create mode 100644 src/pages/clinician/Settings.tsx
+ create mode 100644 src/pages/patient/CompanionHome.tsx
+ create mode 100644 src/pages/patient/Homework.tsx
+ create mode 100644 src/pages/patient/Journal.tsx
+ create mode 100644 src/styles.css
+ create mode 100644 src/vite-env.d.ts
+ create mode 100644 supabase/config.toml
+ create mode 100644 supabase/functions/_shared/cors.ts
+ create mode 100644 supabase/functions/_shared/forbiddenTerms.ts
+ create mode 100644 supabase/functions/data-export/index.ts
+ create mode 100644 supabase/functions/notes-to-insight/index.ts
+ create mode 100644 supabase/functions/stripe-webhook/index.ts
+ create mode 100644 supabase/migrations/0001_core_schema.sql
+ create mode 100644 supabase/migrations/0002_clinical_admin.sql
+ create mode 100644 supabase/migrations/0003_audit_log.sql
+ create mode 100644 supabase/migrations/0004_rls_policies.sql
+ create mode 100644 supabase/migrations/0005_auth_hook.sql
+ create mode 100644 supabase/migrations/0006_seed.sql
+ create mode 100644 tests/crisisDetection.test.ts
+ create mode 100644 tests/forbiddenTerms.test.ts
+ create mode 100644 tsconfig.json
+ create mode 100644 vite.config.ts
+
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..078a31e
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,11 @@
++# Wellspring environment variables
++# Client-side (safe to ship): anon key only. NEVER put the service-role key here.
++VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
++VITE_SUPABASE_ANON_KEY=your-anon-key
++
++# Server-only (Edge Functions / admin jobs). Set via `supabase secrets set`.
++# SUPABASE_SERVICE_ROLE_KEY=...   # service-role: server-only admin jobs ONLY
++# ANTHROPIC_API_KEY=...           # zero-retention terms required
++# GEMINI_API_KEY=...
++# STRIPE_SECRET_KEY=...
++# STRIPE_WEBHOOK_SECRET=...
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..c8866c5
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,14 @@
++node_modules/
++dist/
++dist-ssr/
++*.local
++.env
++.env.*
++!.env.example
++.DS_Store
++coverage/
++supabase/.temp/
++supabase/.branches/
++*.log
++tsconfig.tsbuildinfo
++package-lock.json
+diff --git a/README.md b/README.md
+index ecc4230..f116fe7 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1,67 @@
+-# Ai-clinic-work-new-
+\ No newline at end of file
++# Wellspring
++
++A multi-tenant SaaS (installable **PWA**) for private UK therapy/counselling
++clinics — initial market Edgbaston/Birmingham.
++
++> **Wellspring is a wellbeing + practice-administration support tool, NOT a
++> medical device.** It never diagnoses, triages, screens, risk-scores, or
++> monitors clinical conditions. See
++> [`docs/compliance/not-a-medical-device.md`](docs/compliance/not-a-medical-device.md).
++
++## Two role-gated experiences, one codebase
++
++**Clinician / owner side**
++- **Notes-to-insight layer** — ingest typed/pasted session notes and generate a
++  structured per-client summary, a "what changed since last session" recap, and a
++  pre-session prep brief. (Drafting aid the clinician reviews and owns.)
++- **Automated admin** — scheduling, intake + consent capture, reminders, billing
++  reminders (Stripe), GDPR record-keeping with audit logs.
++- **Owner dashboard** — caseload, utilisation, no-show rate, and self-reported
++  wellbeing trends (framed as *engagement*, not clinical severity).
++
++**Patient side (clinic-branded, stubbed)**
++- Wellbeing companion: journaling, daily mood/wellbeing check-ins (not clinical
++  symptom tracking), therapist-assigned fixed psychoeducation "chapters".
++- A **deterministic, non-LLM crisis-detection layer** sits in front of any
++  free-text input and surfaces UK helplines (Samaritans 116 123, 999). It never
++  attempts clinical advice. See `src/lib/crisisDetection.ts`.
++
++## Tech stack
++React + TypeScript PWA · Supabase (Postgres, Auth, Storage, Edge Functions) ·
++Stripe (per-clinic subscriptions, per-seat + per-session metering) · Claude/Gemini
++called **only** from server-side Edge Functions under zero-retention terms.
++
++## Multi-tenant isolation (critical)
++- Every table has a `clinic_id`; **RLS enabled on all tables** (default deny).
++- Policies match `clinic_id` to a JWT custom claim set by a Supabase **Custom
++  Access Token auth hook** at login (`supabase/migrations/0005_auth_hook.sql`).
++- Every `clinic_id` is indexed.
++- Client calls use the **anon key + user JWT**; the **service-role key** is
++  restricted to server-only admin jobs (Edge Functions).
++
++## Getting started
++```bash
++cp .env.example .env          # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
++npm install
++supabase start                # local stack
++npm run db:reset              # apply migrations 0001–0006 (incl. demo seed)
++npm run functions:serve       # Edge Functions
++npm run dev                   # PWA dev server
++npm test                      # crisis + compliance unit tests
++```
++
++## Repository layout
++```
++docs/compliance/      DPA template, APD, DPIA skeleton, not-a-medical-device memo
++docs/migration-plan.md
++supabase/migrations/  0001 core · 0002 clinical/admin · 0003 audit · 0004 RLS · 0005 auth hook · 0006 seed
++supabase/functions/   notes-to-insight, crisis (shared lib), stripe-webhook, data-export
++src/                  React PWA (clinician pages first, patient companion stubbed)
++tests/                deterministic crisis + forbidden-terms guardrail tests
++```
++
++## Compliance posture
++Clinic = **data controller**, Wellspring = **data processor**. Encryption in
++transit/at rest, UK/EU residency, explicit consent for special-category health
++data with withdrawal, configurable retention/deletion, full audit trail, and a
++Settings page where each clinic manages DPA acceptance and data export.
+diff --git a/docs/compliance/DPA-template.md b/docs/compliance/DPA-template.md
+new file mode 100644
+index 0000000..86362bc
+--- /dev/null
++++ b/docs/compliance/DPA-template.md
+@@ -0,0 +1,83 @@
++# Data Processing Agreement (Template)
++
++**Between the Clinic (the "Controller") and Wellspring Ltd (the "Processor")**
++
++> Template only — not legal advice. Each clinic accepts a versioned copy of this DPA
++> in **Settings → Compliance → Data Processing Agreement**, and the acceptance
++> (version, timestamp, accepting user) is recorded in the audit log.
++
++This Agreement supplements the Wellspring Terms of Service and reflects Article 28 of
++the UK GDPR. Where the Clinic processes special-category health data, the Clinic is the
++**data controller** and Wellspring is the **data processor**.
++
++## 1. Subject matter and duration
++The Processor processes personal data on behalf of the Controller for the term of the
++subscription and for any agreed retention period thereafter.
++
++## 2. Nature and purpose of processing
++Hosting and operating a wellbeing and clinic-administration platform: storage of
++session notes, intake/consent records, scheduling, billing references, journaling, and
++self-reported wellbeing check-ins; and AI-assisted summarisation of clinician-authored
++notes.
++
++## 3. Types of personal data
++Identification/contact data; appointment and billing metadata; clinician session notes;
++patient journaling and self-reported wellbeing check-ins. **Special-category data:**
++health-related information contained in notes and check-ins.
++
++## 4. Categories of data subjects
++Clinic staff (clinicians, owners, administrators) and the clinic's patients/clients.
++
++## 5. Processor obligations (Art. 28(3))
++The Processor shall:
++(a) process personal data only on documented instructions from the Controller,
++    including on international transfers;
++(b) ensure persons authorised to process are bound by confidentiality;
++(c) implement the technical and organisational measures in **Annex A**;
++(d) engage sub-processors only per clause 6;
++(e) assist the Controller with data-subject rights requests via the export/deletion
++    tooling;
++(f) assist with security, breach notification (clause 7), and DPIAs;
++(g) at the Controller's choice, delete or return all personal data at end of service;
++(h) make available information necessary to demonstrate compliance and allow audits.
++
++## 6. Sub-processors
++The Controller authorises the sub-processors listed in **Annex B**. The Processor gives
++prior notice of changes and gives the Controller the opportunity to object.
++
++## 7. Personal data breach
++The Processor notifies the Controller **without undue delay and within 72 hours** of
++becoming aware of a personal data breach, with the information needed for the Controller
++to meet its Art. 33/34 obligations.
++
++## 8. International transfers and residency
++Personal data is hosted in the **UK/EU**. Any transfer outside the UK/EU requires an
++appropriate Art. 46 safeguard (e.g. UK IDTA / EU SCCs). AI sub-processors operate under
++**zero-retention** terms and do not train on Controller data.
++
++## 9. Liability and term
++As set out in the Terms of Service. This Agreement terminates with the subscription,
++subject to surviving confidentiality and deletion obligations.
++
++---
++
++### Annex A — Technical and organisational measures
++- Encryption in transit (TLS 1.2+) and at rest.
++- Per-tenant logical isolation via `clinic_id` and Postgres Row-Level Security.
++- Role-based access control; least-privilege service-role usage (server-only).
++- Full audit logging of access to and changes of personal data.
++- Configurable retention and deletion; data-export tooling.
++- Regular backups with encryption; documented restore procedures.
++
++### Annex B — Authorised sub-processors
++| Sub-processor | Purpose | Location | Safeguards |
++|---|---|---|---|
++| Supabase | Database, auth, storage, edge compute | EU region | DPA, UK/EU residency |
++| Stripe | Subscription & metered billing | UK/EU + adequacy/SCCs | DPA |
++| Anthropic | AI summarisation (server-side) | Zero-retention API | DPA, no-training |
++| Google (Gemini) | AI summarisation (optional, server-side) | Zero-retention API | DPA, no-training |
++
++### Annex C — Versioning
++| Version | Effective date | Notes |
++|---|---|---|
++| 1.0 | 2026-01-01 | Initial template |
+diff --git a/docs/compliance/DPIA-skeleton.md b/docs/compliance/DPIA-skeleton.md
+new file mode 100644
+index 0000000..f5a4f24
+--- /dev/null
++++ b/docs/compliance/DPIA-skeleton.md
+@@ -0,0 +1,59 @@
++# Data Protection Impact Assessment (DPIA) — Skeleton
++
++*Required where processing is likely to result in a high risk to individuals
++(Art. 35 UK GDPR). Processing special-category health data at scale meets the threshold.*
++
++> Skeleton to be completed jointly by the clinic (controller) and Wellspring (processor).
++
++## 1. Identify the need for a DPIA
++Processing of special-category health data; use of AI to summarise clinician notes;
++multi-tenant platform serving vulnerable individuals. **DPIA required.**
++
++## 2. Describe the processing
++- **Nature:** storage and AI-assisted summarisation of clinician notes; patient
++  journaling and self-reported wellbeing check-ins; scheduling, intake, billing.
++- **Scope:** patients and staff of subscribing UK clinics; special-category data.
++- **Context:** private therapy clinics; patients may be in distress.
++- **Purposes:** wellbeing and administrative support — **not** diagnosis/treatment.
++- **Data flows:** client (anon key + user JWT) → Supabase (RLS) → server-side Edge
++  Functions → zero-retention AI API. Service-role key restricted to server jobs.
++
++## 3. Consultation
++Record consultation with clinicians, a DPO, and (where appropriate) patient
++representatives.
++
++## 4. Assess necessity and proportionality
++- Lawful basis and Art. 9 condition documented (see APD).
++- Data minimisation: no clinical scoring; only user-entered text.
++- Processor instructions, sub-processor list, retention policy in place.
++
++## 5. Identify and assess risks
++| # | Risk | Likelihood | Severity | Overall |
++|---|---|---|---|---|
++| R1 | Cross-tenant data leakage | Low | High | High |
++| R2 | AI output drifts into clinical advice/diagnosis | Med | High | High |
++| R3 | Health data exposed via caching/logs | Low | High | High |
++| R4 | Patient distress in free-text chat unaddressed | Med | High | High |
++| R5 | Consent unclear / not withdrawable | Low | Med | Med |
++| R6 | Service-role key misuse | Low | High | High |
++
++## 6. Measures to reduce risk
++| # | Measure | Residual risk |
++|---|---|---|
++| R1 | RLS on every table; `clinic_id` JWT claim via auth hook; indexed; tests | Low |
++| R2 | Forbidden-terms filter; prompts constrained to summarise authored notes; human review | Low |
++| R3 | Health responses NetworkOnly in SW; no PII in logs; encryption | Low |
++| R4 | Deterministic, non-LLM crisis layer surfaces Samaritans 116 123 / 999 | Low |
++| R5 | Explicit consent capture with timestamped withdrawal; default no clinician share | Low |
++| R6 | Service-role server-only; secrets in vault; least privilege | Low |
++
++## 7. Sign-off and outcome
++| Item | Name/role | Date |
++|---|---|---|
++| Measures approved by | | |
++| Residual risks accepted by | | |
++| DPO advice | | |
++| Consultation with ICO needed? | No (residual risk not high) | |
++
++## 8. Keep under review
++Reviewed on material change and at least annually.
+diff --git a/docs/compliance/appropriate-policy-document.md b/docs/compliance/appropriate-policy-document.md
+new file mode 100644
+index 0000000..297c712
+--- /dev/null
++++ b/docs/compliance/appropriate-policy-document.md
+@@ -0,0 +1,44 @@
++# Appropriate Policy Document (APD)
++
++**For processing of special-category and criminal-offence data**
++*Required by Schedule 1, Part 4 of the Data Protection Act 2018.*
++
++> Template — each clinic adapts and retains its own copy. Wellspring maintains this APD
++> for its own processing as a processor; the clinic (controller) maintains an equivalent.
++
++## 1. Description of processing
++Wellspring processes **health data** (special category under Art. 9 UK GDPR) contained
++in clinician session notes and patient self-reported wellbeing check-ins, on behalf of
++clinics, to provide wellbeing and practice-administration support.
++
++## 2. Schedule 1 condition relied upon
++Processing is carried out under the controller's lawful basis. The typical conditions
++are:
++- **Art. 9(2)(h)** — provision of health/social care (clinic-side), and/or
++- **Art. 9(2)(a)** — explicit consent (patient-facing wellbeing companion; results flow
++  to the clinician **only** with explicit patient consent).
++
++The corresponding DPA 2018 Schedule 1 conditions are documented per clinic.
++
++## 3. Compliance with the data protection principles
++- **Lawfulness, fairness, transparency:** privacy information provided at intake; consent
++  captured and withdrawable.
++- **Purpose limitation:** data used only for wellbeing/administration; no secondary use;
++  no AI training on clinic data.
++- **Data minimisation:** only data the clinician/patient enters; no clinical scoring.
++- **Accuracy:** clinicians review AI-drafted summaries before use.
++- **Storage limitation:** configurable retention and deletion per clinic.
++- **Integrity & confidentiality:** RLS isolation, encryption, audit logging, RBAC.
++- **Accountability:** audit trail, DPIA, this APD, and the DPA.
++
++## 4. Retention and erasure
++Default retention is configurable per clinic. On expiry or on a valid erasure request,
++records are deleted (or returned) using the export/deletion tooling, and the action is
++logged.
++
++## 5. Review
++This document is reviewed at least annually and on any material change to processing.
++
++| Version | Date | Owner | Notes |
++|---|---|---|---|
++| 1.0 | 2026-01-01 | DPO | Initial |
+diff --git a/docs/compliance/not-a-medical-device.md b/docs/compliance/not-a-medical-device.md
+new file mode 100644
+index 0000000..17b5d9d
+--- /dev/null
++++ b/docs/compliance/not-a-medical-device.md
+@@ -0,0 +1,70 @@
++# Why Wellspring Is Not a Medical Device
++
++**One-page memo — keep with the product file. Review on any material feature change.**
++
++## Summary
++
++Wellspring is a **wellbeing and practice-administration support tool** for private
++therapy/counselling clinics. It does **not** meet the definition of a medical device
++under the UK Medical Devices Regulations 2002 (as amended) or EU MDR 2017/745, and it
++is **not** software as a medical device (SaMD) under MHRA guidance.
++
++We make this determination because Wellspring's intended purpose — the legally
++operative test — is administrative and wellbeing support, not a medical purpose.
++
++## Intended purpose (the deciding factor)
++
++A product is a medical device because of the **manufacturer's stated intended
++purpose**, not its technical capability. Wellspring's intended purpose is:
++
++1. To help clinicians organise and summarise their **own** session notes into
++   administrative summaries and prep briefs (a productivity layer over text the
++   clinician authored).
++2. To automate clinic administration: scheduling, intake, consent capture, reminders,
++   billing, and record-keeping.
++3. To give patients a **wellbeing companion**: journaling, self-reported daily mood
++   check-ins (engagement, not clinical measurement), and clinician-assigned fixed
++   psychoeducation content.
++
++None of these is a medical purpose within the meaning of the regulations.
++
++## What Wellspring deliberately does NOT do
++
++To stay outside the medical-device boundary, the product **must never**:
++
++- **Diagnose, screen, triage, or risk-score** any condition.
++- **Treat, prevent, cure, or alleviate** disease or injury, or claim to.
++- **Monitor** a physiological or clinical condition (e.g. "monitor depression").
++- Produce **clinical decisions or recommendations** that direct patient care.
++- Interpret mood/wellbeing check-ins as **clinical severity** or symptom measurement.
++- Generate **automated clinical advice** in any free-text chat.
++
++These prohibitions are enforced in copy review and in code (see
++`src/lib/forbiddenTerms.ts` and the deterministic crisis layer in
++`src/lib/crisisDetection.ts`, which only surfaces **signposting** to existing UK
++helplines and never offers clinical advice).
++
++## Language discipline
++
++Across all UI copy, marketing, and generated AI output we avoid:
++`treat`, `prevent`, `diagnose`, `screen`, `triage`, `monitor [condition]`,
++`assess severity`, `clinical risk`. The AI summarisation layer is prompted and
++post-filtered to describe **what the clinician wrote**, framed as engagement and
++administrative support, never as clinical judgement.
++
++## The AI summarisation boundary
++
++The notes-to-insight layer reorganises text the **clinician already authored**. It
++adds no clinical inference about the patient and is positioned as a drafting aid the
++clinician reviews and owns. It is analogous to a transcription/summarisation tool, a
++recognised non-device category, provided no diagnostic or treatment recommendation is
++produced.
++
++## If the intended purpose ever changes
++
++Any feature that scores, classifies, triages, or recommends care would likely make
++Wellspring a medical device and trigger UKCA/CE conformity assessment obligations.
++**Such features must not ship without a formal regulatory review and sign-off.**
++
++> This memo is an internal product-governance record, not legal advice. Obtain
++> regulatory/legal counsel before any change to intended purpose.
+diff --git a/docs/migration-plan.md b/docs/migration-plan.md
+new file mode 100644
+index 0000000..10d938f
+--- /dev/null
++++ b/docs/migration-plan.md
+@@ -0,0 +1,65 @@
++# Wellspring — Migration & Rollout Plan
++
++## Migration ordering
++
++Migrations live in `supabase/migrations/` and run in filename (timestamp) order:
++
++1. **`0001_core_schema.sql`** — extensions, enums, `clinics`, `profiles`
++   (user↔clinic↔role), and the `helper` functions used by RLS
++   (`auth.clinic_id()`, `auth.has_role()`).
++2. **`0002_clinical_admin.sql`** — patients, appointments, rooms, intake forms,
++   consents, session notes, AI insights, billing references, wellbeing check-ins,
++   journal entries, homework assignments, psychoeducation content.
++3. **`0003_audit_log.sql`** — append-only audit table + generic trigger.
++4. **`0004_rls_policies.sql`** — enable RLS on **every** table and define
++   `clinic_id`-scoped policies; create the `clinic_id` index on every table.
++5. **`0005_auth_hook.sql`** — the Custom Access Token hook that injects
++   `clinic_id` and `role` as JWT claims at login.
++6. **`0006_seed.sql`** — one demo clinic, two clinicians, three patients (dev only).
++
++## How the multi-tenant isolation works (critical)
++
++- Every business table has a **non-null `clinic_id`** and an index on it.
++- **RLS is enabled on all tables.** Default deny; policies grant access only when
++  `clinic_id = auth.clinic_id()`.
++- `auth.clinic_id()` reads the **`clinic_id` custom claim** from the user's JWT.
++- The claim is set by a **Custom Access Token auth hook** (`0005`) at login, sourced
++  from `profiles`. Clients never set it themselves.
++- All client calls use the **anon key + the user's JWT**. The **service-role key** is
++  used **only** by server-side admin jobs / Edge Functions and bypasses RLS — so it is
++  never shipped to the browser.
++
++## Local development
++
++```bash
++supabase start                 # local Postgres + auth + storage
++npm run db:reset               # apply all migrations + seed
++npm run functions:serve        # serve Edge Functions locally
++npm run dev                    # Vite PWA dev server
++```
++
++## Configuring the auth hook
++
++After `0005`, enable the hook in Supabase:
++
++- Dashboard → Authentication → Hooks → **Custom Access Token** →
++  select `public.custom_access_token_hook`, **or**
++- `config.toml`: `[auth.hook.custom_access_token] enabled = true` and
++  `uri = "pg-functions://postgres/public/custom_access_token_hook"`.
++
++## Production rollout
++
++1. Provision a Supabase project in a **UK/EU region**.
++2. `supabase db push` (migrations `0001`–`0005`; **never** run `0006_seed` in prod).
++3. `supabase secrets set` for `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`,
++   `STRIPE_WEBHOOK_SECRET`, etc. The service-role key stays in the platform vault.
++4. Deploy Edge Functions: `supabase functions deploy`.
++5. Enable the auth hook (above).
++6. Configure Stripe products/prices (per-seat + per-session metering) and the webhook.
++7. Smoke-test cross-tenant isolation with the RLS test (`tests/rls.test.ts`).
++
++## Rollback
++
++Each migration is forward-only; to roll back a release, restore from the pre-deploy
++backup or apply a new corrective migration. Never edit an already-applied migration —
++add a new one.
+diff --git a/eslint.config.js b/eslint.config.js
+new file mode 100644
+index 0000000..d3646ec
+--- /dev/null
++++ b/eslint.config.js
+@@ -0,0 +1,10 @@
++import js from '@eslint/js';
++
++export default [
++  { ignores: ['dist', 'node_modules', 'supabase/functions'] },
++  js.configs.recommended,
++  {
++    files: ['src/**/*.{ts,tsx}', 'tests/**/*.ts'],
++    languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
++  },
++];
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000..bce9372
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,18 @@
++<!doctype html>
++<html lang="en-GB">
++  <head>
++    <meta charset="UTF-8" />
++    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <meta name="theme-color" content="#2f6f6a" />
++    <meta
++      name="description"
++      content="Wellspring — wellbeing and practice-administration support for therapy clinics. Not a medical device."
++    />
++    <title>Wellspring</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..d21e6b7
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,36 @@
++{
++  "name": "wellspring",
++  "private": true,
++  "version": "0.1.0",
++  "type": "module",
++  "description": "Wellspring — a wellbeing + practice-administration support tool for private UK therapy/counselling clinics. NOT a medical device.",
++  "scripts": {
++    "dev": "vite",
++    "build": "tsc -b && vite build",
++    "preview": "vite preview",
++    "lint": "eslint .",
++    "typecheck": "tsc --noEmit",
++    "test": "vitest run",
++    "test:watch": "vitest",
++    "db:reset": "supabase db reset",
++    "db:push": "supabase db push",
++    "functions:serve": "supabase functions serve"
++  },
++  "dependencies": {
++    "@supabase/supabase-js": "^2.45.0",
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1",
++    "react-router-dom": "^6.26.0"
++  },
++  "devDependencies": {
++    "@eslint/js": "^9.9.0",
++    "@types/react": "^18.3.3",
++    "@types/react-dom": "^18.3.0",
++    "@vitejs/plugin-react": "^4.3.1",
++    "eslint": "^9.9.0",
++    "typescript": "^5.5.4",
++    "vite": "^5.4.0",
++    "vite-plugin-pwa": "^0.20.1",
++    "vitest": "^2.0.5"
++  }
++}
+diff --git a/public/favicon.svg b/public/favicon.svg
+new file mode 100644
+index 0000000..dca30ab
+--- /dev/null
++++ b/public/favicon.svg
+@@ -0,0 +1,4 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
++  <rect width="32" height="32" rx="7" fill="#2f6f6a"/>
++  <path d="M16 7c4 4 6 7 6 10a6 6 0 0 1-12 0c0-3 2-6 6-10z" fill="#e8f2f1"/>
++</svg>
+diff --git a/src/App.tsx b/src/App.tsx
+new file mode 100644
+index 0000000..fc444f5
+--- /dev/null
++++ b/src/App.tsx
+@@ -0,0 +1,87 @@
++import { Routes, Route, Navigate } from 'react-router-dom';
++import { useAuth } from './lib/auth';
++import type { UserRole } from './lib/types';
++import { Layout } from './components/Layout';
++import SignIn from './pages/SignIn';
++
++// Clinician/owner side
++import Dashboard from './pages/clinician/Dashboard';
++import Clients from './pages/clinician/Clients';
++import ClientDetail from './pages/clinician/ClientDetail';
++import Schedule from './pages/clinician/Schedule';
++import Settings from './pages/clinician/Settings';
++
++// Patient companion (stub)
++import CompanionHome from './pages/patient/CompanionHome';
++import Journal from './pages/patient/Journal';
++import Homework from './pages/patient/Homework';
++
++function RequireRole({
++  roles,
++  children,
++}: {
++  roles: UserRole[];
++  children: JSX.Element;
++}) {
++  const { session, profile, loading } = useAuth();
++  if (loading) return <div className="centered">Loading…</div>;
++  if (!session) return <Navigate to="/signin" replace />;
++  if (profile && !roles.includes(profile.role)) {
++    return <Navigate to="/" replace />;
++  }
++  return children;
++}
++
++export default function App() {
++  const { session, profile } = useAuth();
++
++  return (
++    <Routes>
++      <Route path="/signin" element={<SignIn />} />
++
++      <Route
++        path="/"
++        element={
++          session ? (
++            <Navigate
++              to={profile?.role === 'patient' ? '/companion' : '/dashboard'}
++              replace
++            />
++          ) : (
++            <Navigate to="/signin" replace />
++          )
++        }
++      />
++
++      {/* Clinician / owner / admin */}
++      <Route
++        element={
++          <RequireRole roles={['owner', 'clinician', 'admin']}>
++            <Layout variant="clinician" />
++          </RequireRole>
++        }
++      >
++        <Route path="/dashboard" element={<Dashboard />} />
++        <Route path="/clients" element={<Clients />} />
++        <Route path="/clients/:id" element={<ClientDetail />} />
++        <Route path="/schedule" element={<Schedule />} />
++        <Route path="/settings" element={<Settings />} />
++      </Route>
++
++      {/* Patient companion */}
++      <Route
++        element={
++          <RequireRole roles={['patient']}>
++            <Layout variant="patient" />
++          </RequireRole>
++        }
++      >
++        <Route path="/companion" element={<CompanionHome />} />
++        <Route path="/companion/journal" element={<Journal />} />
++        <Route path="/companion/homework" element={<Homework />} />
++      </Route>
++
++      <Route path="*" element={<Navigate to="/" replace />} />
++    </Routes>
++  );
++}
+diff --git a/src/components/CrisisBanner.tsx b/src/components/CrisisBanner.tsx
+new file mode 100644
+index 0000000..488746a
+--- /dev/null
++++ b/src/components/CrisisBanner.tsx
+@@ -0,0 +1,28 @@
++import { UK_HELPLINES } from '../lib/crisisDetection';
++
++// Static signposting shown when the deterministic crisis layer flags input.
++// This is signposting to EXISTING UK services only — never clinical advice.
++export function CrisisBanner() {
++  return (
++    <div className="crisis-banner" role="alert">
++      <h3>If you need to talk to someone now</h3>
++      <p>You don't have to go through this alone. These UK services can help right away:</p>
++      <ul>
++        <li>
++          <strong>{UK_HELPLINES.samaritans.name}</strong> —{' '}
++          <a href="tel:116123">{UK_HELPLINES.samaritans.phone}</a>{' '}
++          ({UK_HELPLINES.samaritans.note})
++        </li>
++        <li>
++          <strong>{UK_HELPLINES.emergency.name}</strong> —{' '}
++          <a href="tel:999">{UK_HELPLINES.emergency.phone}</a>{' '}
++          ({UK_HELPLINES.emergency.note})
++        </li>
++        <li>
++          <strong>{UK_HELPLINES.shout.name}</strong> — {UK_HELPLINES.shout.sms}{' '}
++          ({UK_HELPLINES.shout.note})
++        </li>
++      </ul>
++    </div>
++  );
++}
+diff --git a/src/components/Layout.tsx b/src/components/Layout.tsx
+new file mode 100644
+index 0000000..510e238
+--- /dev/null
++++ b/src/components/Layout.tsx
+@@ -0,0 +1,52 @@
++import { Link, Outlet, useLocation } from 'react-router-dom';
++import { useAuth } from '../lib/auth';
++
++const CLINICIAN_NAV = [
++  { to: '/dashboard', label: 'Dashboard' },
++  { to: '/clients', label: 'Clients' },
++  { to: '/schedule', label: 'Schedule' },
++  { to: '/settings', label: 'Settings' },
++];
++
++const PATIENT_NAV = [
++  { to: '/companion', label: 'Home' },
++  { to: '/companion/journal', label: 'Journal' },
++  { to: '/companion/homework', label: 'Exercises' },
++];
++
++export function Layout({ variant }: { variant: 'clinician' | 'patient' }) {
++  const { profile, signOut } = useAuth();
++  const loc = useLocation();
++  const nav = variant === 'clinician' ? CLINICIAN_NAV : PATIENT_NAV;
++
++  return (
++    <div className="app-shell">
++      <aside className="sidebar">
++        <div className="brand">Wellspring</div>
++        <nav>
++          {nav.map((n) => (
++            <Link
++              key={n.to}
++              to={n.to}
++              className={loc.pathname === n.to ? 'active' : ''}
++            >
++              {n.label}
++            </Link>
++          ))}
++        </nav>
++        <div className="sidebar-footer">
++          <div className="muted">{profile?.full_name ?? profile?.email}</div>
++          <button onClick={signOut} className="link-btn">
++            Sign out
++          </button>
++          <p className="disclaimer">
++            Wellbeing &amp; admin support. Not a medical device.
++          </p>
++        </div>
++      </aside>
++      <main className="content">
++        <Outlet />
++      </main>
++    </div>
++  );
++}
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+new file mode 100644
+index 0000000..9e48db3
+--- /dev/null
++++ b/src/lib/api.ts
+@@ -0,0 +1,17 @@
++import { supabase } from './supabaseClient';
++import type { InsightKind, NoteInsight } from './types';
++
++// Calls the server-side notes-to-insight Edge Function with the user's JWT.
++// All AI runs server-side under zero-retention terms; the browser never holds
++// an AI provider key.
++export async function generateInsight(
++  patientId: string,
++  kind: InsightKind,
++): Promise<NoteInsight> {
++  const { data, error } = await supabase.functions.invoke('notes-to-insight', {
++    body: { patientId, kind },
++  });
++  if (error) throw error;
++  if (data?.error) throw new Error(data.error);
++  return data.insight as NoteInsight;
++}
+diff --git a/src/lib/auth.tsx b/src/lib/auth.tsx
+new file mode 100644
+index 0000000..3bf024d
+--- /dev/null
++++ b/src/lib/auth.tsx
+@@ -0,0 +1,65 @@
++import {
++  createContext,
++  useContext,
++  useEffect,
++  useState,
++  type ReactNode,
++} from 'react';
++import type { Session } from '@supabase/supabase-js';
++import { supabase } from './supabaseClient';
++import type { Profile } from './types';
++
++interface AuthState {
++  session: Session | null;
++  profile: Profile | null;
++  loading: boolean;
++  signOut: () => Promise<void>;
++}
++
++const AuthContext = createContext<AuthState | undefined>(undefined);
++
++export function AuthProvider({ children }: { children: ReactNode }) {
++  const [session, setSession] = useState<Session | null>(null);
++  const [profile, setProfile] = useState<Profile | null>(null);
++  const [loading, setLoading] = useState(true);
++
++  useEffect(() => {
++    supabase.auth.getSession().then(({ data }) => setSession(data.session));
++    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
++    return () => sub.subscription.unsubscribe();
++  }, []);
++
++  useEffect(() => {
++    if (!session?.user) {
++      setProfile(null);
++      setLoading(false);
++      return;
++    }
++    // RLS lets a user read their own profile row.
++    supabase
++      .from('profiles')
++      .select('id, clinic_id, role, full_name, email')
++      .eq('id', session.user.id)
++      .single()
++      .then(({ data }) => {
++        setProfile((data as Profile) ?? null);
++        setLoading(false);
++      });
++  }, [session]);
++
++  const signOut = async () => {
++    await supabase.auth.signOut();
++  };
++
++  return (
++    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
++      {children}
++    </AuthContext.Provider>
++  );
++}
++
++export function useAuth(): AuthState {
++  const ctx = useContext(AuthContext);
++  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
++  return ctx;
++}
+diff --git a/src/lib/crisisDetection.ts b/src/lib/crisisDetection.ts
+new file mode 100644
+index 0000000..c23630c
+--- /dev/null
++++ b/src/lib/crisisDetection.ts
+@@ -0,0 +1,46 @@
++// Deterministic, NON-LLM crisis-detection layer.
++//
++// This runs in front of ANY free-text chat/journal input in the patient
++// companion. It is intentionally a simple, auditable rule set — NOT a model,
++// NOT a clinical risk score, and NOT a diagnosis. Its ONLY job is to decide
++// whether to SURFACE existing UK helpline signposting. It never gives advice.
++
++export interface CrisisResult {
++  flagged: boolean;
++  matched: string[];
++}
++
++// Phrase patterns indicating a person may be in immediate distress. Word
++// boundaries keep matches conservative. This list is reviewed by humans, not
++// generated, and is deliberately about signposting — not clinical judgement.
++const CRISIS_PATTERNS: RegExp[] = [
++  /\bkill myself\b/i,
++  /\bkilling myself\b/i,
++  /\bend (my|it all|my life)\b/i,
++  /\bsuicid(e|al)\b/i,
++  /\btake my (own )?life\b/i,
++  /\bdon'?t want to (be alive|live|wake up)\b/i,
++  /\bwant to die\b/i,
++  /\bharm(ing)? myself\b/i,
++  /\bself[-\s]?harm(s|ed|ing)?\b/i,
++  /\bcut(ting)? myself\b/i,
++  /\bno reason to (live|go on)\b/i,
++  /\bbetter off (dead|without me)\b/i,
++  /\boverdose\b/i,
++];
++
++export function detectCrisis(text: string): CrisisResult {
++  const matched: string[] = [];
++  for (const re of CRISIS_PATTERNS) {
++    const m = text.match(re);
++    if (m) matched.push(m[0].toLowerCase());
++  }
++  return { flagged: matched.length > 0, matched };
++}
++
++// UK helpline signposting shown when the layer flags. Static, never AI-generated.
++export const UK_HELPLINES = {
++  samaritans: { name: 'Samaritans', phone: '116 123', note: 'free, 24/7' },
++  emergency: { name: 'Emergency services', phone: '999', note: 'if life is at risk' },
++  shout: { name: 'Shout', sms: 'Text SHOUT to 85258', note: 'free 24/7 text support' },
++} as const;
+diff --git a/src/lib/forbiddenTerms.ts b/src/lib/forbiddenTerms.ts
+new file mode 100644
+index 0000000..65aeed3
+--- /dev/null
++++ b/src/lib/forbiddenTerms.ts
+@@ -0,0 +1,23 @@
++// Client-side copy of the compliance guardrail. Mirrors
++// supabase/functions/_shared/forbiddenTerms.ts so UI copy and any free-text the
++// app renders can be checked against the not-a-medical-device boundary.
++
++export const FORBIDDEN_TERMS: RegExp[] = [
++  /\btreat(s|ed|ing|ment)?\b/i,
++  /\bprevent(s|ed|ing|ion)?\b/i,
++  /\bdiagnos(e|es|ed|ing|is|tic)\b/i,
++  /\bscreen(s|ed|ing)?\b/i,
++  /\btriage(s|d)?\b/i,
++  /\bmonitor(s|ed|ing)?\b/i,
++  /\bclinical (risk|severity)\b/i,
++  /\brisk[-\s]?scor(e|es|ed|ing)\b/i,
++];
++
++export function checkForbiddenTerms(text: string): { ok: boolean; matches: string[] } {
++  const matches: string[] = [];
++  for (const re of FORBIDDEN_TERMS) {
++    const m = text.match(re);
++    if (m) matches.push(m[0]);
++  }
++  return { ok: matches.length === 0, matches };
++}
+diff --git a/src/lib/supabaseClient.ts b/src/lib/supabaseClient.ts
+new file mode 100644
+index 0000000..2e93dca
+--- /dev/null
++++ b/src/lib/supabaseClient.ts
+@@ -0,0 +1,10 @@
++import { createClient } from '@supabase/supabase-js';
++
++// Client uses the ANON key + the signed-in user's JWT only.
++// The service-role key is NEVER referenced in client code.
++const url = import.meta.env.VITE_SUPABASE_URL as string;
++const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
++
++export const supabase = createClient(url, anonKey, {
++  auth: { persistSession: true, autoRefreshToken: true },
++});
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+new file mode 100644
+index 0000000..343c053
+--- /dev/null
++++ b/src/lib/types.ts
+@@ -0,0 +1,47 @@
++export type UserRole = 'owner' | 'clinician' | 'admin' | 'patient';
++
++export interface Profile {
++  id: string;
++  clinic_id: string;
++  role: UserRole;
++  full_name: string | null;
++  email: string | null;
++}
++
++export interface Patient {
++  id: string;
++  clinic_id: string;
++  full_name: string;
++  email: string | null;
++  status: string;
++  primary_clinician_id: string | null;
++}
++
++export interface SessionNote {
++  id: string;
++  patient_id: string;
++  clinician_id: string;
++  body: string;
++  session_date: string;
++}
++
++export type InsightKind = 'treatment_summary' | 'whats_changed' | 'prep_brief';
++
++export interface NoteInsight {
++  id: string;
++  patient_id: string;
++  kind: InsightKind;
++  content: { text: string };
++  model: string | null;
++  generated_at: string;
++  reviewed_at: string | null;
++}
++
++export interface Appointment {
++  id: string;
++  patient_id: string;
++  clinician_id: string;
++  starts_at: string;
++  ends_at: string;
++  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..4793bdd
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,16 @@
++import React from 'react';
++import ReactDOM from 'react-dom/client';
++import { BrowserRouter } from 'react-router-dom';
++import { AuthProvider } from './lib/auth';
++import App from './App';
++import './styles.css';
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <BrowserRouter>
++      <AuthProvider>
++        <App />
++      </AuthProvider>
++    </BrowserRouter>
++  </React.StrictMode>,
++);
+diff --git a/src/pages/SignIn.tsx b/src/pages/SignIn.tsx
+new file mode 100644
+index 0000000..a4e8b4e
+--- /dev/null
++++ b/src/pages/SignIn.tsx
+@@ -0,0 +1,53 @@
++import { useState } from 'react';
++import { supabase } from '../lib/supabaseClient';
++
++export default function SignIn() {
++  const [email, setEmail] = useState('');
++  const [password, setPassword] = useState('');
++  const [error, setError] = useState<string | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  const submit = async (e: React.FormEvent) => {
++    e.preventDefault();
++    setBusy(true);
++    setError(null);
++    const { error } = await supabase.auth.signInWithPassword({ email, password });
++    if (error) setError(error.message);
++    setBusy(false);
++  };
++
++  return (
++    <div className="centered">
++      <form className="card auth-card" onSubmit={submit}>
++        <h1>Wellspring</h1>
++        <p className="muted">Wellbeing &amp; practice support for your clinic.</p>
++        <label>
++          Email
++          <input
++            type="email"
++            value={email}
++            onChange={(e) => setEmail(e.target.value)}
++            required
++          />
++        </label>
++        <label>
++          Password
++          <input
++            type="password"
++            value={password}
++            onChange={(e) => setPassword(e.target.value)}
++            required
++          />
++        </label>
++        {error && <p className="error">{error}</p>}
++        <button type="submit" disabled={busy}>
++          {busy ? 'Signing in…' : 'Sign in'}
++        </button>
++        <p className="disclaimer">
++          Not a medical device. This tool does not diagnose or provide clinical
++          care.
++        </p>
++      </form>
++    </div>
++  );
++}
+diff --git a/src/pages/clinician/ClientDetail.tsx b/src/pages/clinician/ClientDetail.tsx
+new file mode 100644
+index 0000000..75d9ca9
+--- /dev/null
++++ b/src/pages/clinician/ClientDetail.tsx
+@@ -0,0 +1,131 @@
++import { useEffect, useState } from 'react';
++import { useParams } from 'react-router-dom';
++import { supabase } from '../../lib/supabaseClient';
++import { generateInsight } from '../../lib/api';
++import type { InsightKind, NoteInsight, Patient, SessionNote } from '../../lib/types';
++
++// The notes-to-insight layer (clinician side). Clinician pastes/types notes;
++// the AI produces an administrative draft they review and own.
++const KINDS: { kind: InsightKind; label: string; blurb: string }[] = [
++  { kind: 'treatment_summary', label: 'Client summary', blurb: 'Structured per-client summary of your notes' },
++  { kind: 'whats_changed', label: 'What changed', blurb: 'Recap since the previous session' },
++  { kind: 'prep_brief', label: 'Prep brief', blurb: 'Pre-session prep, one screen' },
++];
++
++export default function ClientDetail() {
++  const { id } = useParams<{ id: string }>();
++  const [patient, setPatient] = useState<Patient | null>(null);
++  const [notes, setNotes] = useState<SessionNote[]>([]);
++  const [draft, setDraft] = useState('');
++  const [insight, setInsight] = useState<NoteInsight | null>(null);
++  const [busy, setBusy] = useState<InsightKind | null>(null);
++  const [error, setError] = useState<string | null>(null);
++
++  const load = async () => {
++    if (!id) return;
++    const [{ data: p }, { data: n }] = await Promise.all([
++      supabase.from('patients').select('*').eq('id', id).single(),
++      supabase
++        .from('session_notes')
++        .select('id, patient_id, clinician_id, body, session_date')
++        .eq('patient_id', id)
++        .order('session_date', { ascending: false }),
++    ]);
++    setPatient((p as Patient) ?? null);
++    setNotes((n as SessionNote[]) ?? []);
++  };
++
++  useEffect(() => {
++    load();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [id]);
++
++  const saveNote = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!id || !draft.trim()) return;
++    const { data: prof } = await supabase.auth.getUser();
++    const { error } = await supabase.from('session_notes').insert({
++      // clinic_id is set from the patient row to satisfy RLS check.
++      clinic_id: patient?.clinic_id,
++      patient_id: id,
++      clinician_id: prof.user?.id,
++      body: draft.trim(),
++    });
++    if (error) setError(error.message);
++    else {
++      setDraft('');
++      load();
++    }
++  };
++
++  const run = async (kind: InsightKind) => {
++    if (!id) return;
++    setBusy(kind);
++    setError(null);
++    try {
++      const result = await generateInsight(id, kind);
++      setInsight(result);
++    } catch (e) {
++      setError(e instanceof Error ? e.message : String(e));
++    } finally {
++      setBusy(null);
++    }
++  };
++
++  if (!patient) return <p>Loading…</p>;
++
++  return (
++    <div className="client-detail">
++      <h1>{patient.full_name}</h1>
++
++      <section className="card">
++        <h2>Add session note</h2>
++        <form onSubmit={saveNote}>
++          <textarea
++            rows={5}
++            placeholder="Type or paste your session notes…"
++            value={draft}
++            onChange={(e) => setDraft(e.target.value)}
++          />
++          <button type="submit">Save note</button>
++        </form>
++      </section>
++
++      <section className="card">
++        <h2>Generate insight</h2>
++        <p className="muted">
++          Reorganises notes you wrote into an administrative draft. Review before
++          use — it is a drafting aid, not clinical advice.
++        </p>
++        <div className="kind-row">
++          {KINDS.map((k) => (
++            <button key={k.kind} disabled={busy !== null} onClick={() => run(k.kind)} title={k.blurb}>
++              {busy === k.kind ? 'Generating…' : k.label}
++            </button>
++          ))}
++        </div>
++        {error && <p className="error">{error}</p>}
++        {insight && (
++          <article className="insight">
++            <div className="muted">
++              {insight.kind} · {insight.model} · draft for review
++            </div>
++            <pre className="insight-text">{insight.content.text}</pre>
++          </article>
++        )}
++      </section>
++
++      <section className="card">
++        <h2>Session notes</h2>
++        <ul className="notes-list">
++          {notes.map((n) => (
++            <li key={n.id}>
++              <strong>{n.session_date}</strong>
++              <p>{n.body}</p>
++            </li>
++          ))}
++        </ul>
++      </section>
++    </div>
++  );
++}
+diff --git a/src/pages/clinician/Clients.tsx b/src/pages/clinician/Clients.tsx
+new file mode 100644
+index 0000000..2502fdb
+--- /dev/null
++++ b/src/pages/clinician/Clients.tsx
+@@ -0,0 +1,44 @@
++import { useEffect, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { supabase } from '../../lib/supabaseClient';
++import type { Patient } from '../../lib/types';
++
++export default function Clients() {
++  const [patients, setPatients] = useState<Patient[]>([]);
++
++  useEffect(() => {
++    supabase
++      .from('patients')
++      .select('id, clinic_id, full_name, email, status, primary_clinician_id')
++      .order('full_name')
++      .then(({ data }) => setPatients((data as Patient[]) ?? []));
++  }, []);
++
++  return (
++    <div>
++      <h1>Clients</h1>
++      <table className="table">
++        <thead>
++          <tr>
++            <th>Name</th>
++            <th>Email</th>
++            <th>Status</th>
++            <th></th>
++          </tr>
++        </thead>
++        <tbody>
++          {patients.map((p) => (
++            <tr key={p.id}>
++              <td>{p.full_name}</td>
++              <td>{p.email}</td>
++              <td>{p.status}</td>
++              <td>
++                <Link to={`/clients/${p.id}`}>Open</Link>
++              </td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </div>
++  );
++}
+diff --git a/src/pages/clinician/Dashboard.tsx b/src/pages/clinician/Dashboard.tsx
+new file mode 100644
+index 0000000..fb32cb0
+--- /dev/null
++++ b/src/pages/clinician/Dashboard.tsx
+@@ -0,0 +1,74 @@
++import { useEffect, useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++
++// Owner dashboard: caseload, utilisation, no-show rate, and self-reported
++// wellbeing engagement trends. Framed as ENGAGEMENT, not clinical severity.
++interface Stats {
++  caseload: number;
++  upcoming: number;
++  noShowRate: number;
++  avgMood: number | null;
++}
++
++export default function Dashboard() {
++  const [stats, setStats] = useState<Stats | null>(null);
++
++  useEffect(() => {
++    (async () => {
++      const [{ count: caseload }, appts, checkins] = await Promise.all([
++        supabase.from('patients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
++        supabase.from('appointments').select('status, starts_at'),
++        supabase.from('wellbeing_checkins').select('mood'),
++      ]);
++
++      const rows = appts.data ?? [];
++      const completedOrNoShow = rows.filter((r) => ['completed', 'no_show'].includes(r.status));
++      const noShows = rows.filter((r) => r.status === 'no_show').length;
++      const upcoming = rows.filter(
++        (r) => r.status === 'scheduled' && new Date(r.starts_at) > new Date(),
++      ).length;
++      const moods = (checkins.data ?? []).map((c) => c.mood).filter((m): m is number => m != null);
++
++      setStats({
++        caseload: caseload ?? 0,
++        upcoming,
++        noShowRate: completedOrNoShow.length
++          ? Math.round((noShows / completedOrNoShow.length) * 100)
++          : 0,
++        avgMood: moods.length ? moods.reduce((a, b) => a + b, 0) / moods.length : null,
++      });
++    })();
++  }, []);
++
++  if (!stats) return <p>Loading dashboard…</p>;
++
++  return (
++    <div>
++      <h1>Owner dashboard</h1>
++      <p className="muted">
++        Engagement and utilisation overview. These are operational signals, not
++        clinical measures.
++      </p>
++      <div className="stat-grid">
++        <Stat label="Active caseload" value={stats.caseload} />
++        <Stat label="Upcoming appointments" value={stats.upcoming} />
++        <Stat label="No-show rate" value={`${stats.noShowRate}%`} />
++        <Stat
++          label="Avg. wellbeing check-in (1–5)"
++          value={stats.avgMood ? stats.avgMood.toFixed(1) : '—'}
++          hint="Self-reported engagement, not a clinical scale"
++        />
++      </div>
++    </div>
++  );
++}
++
++function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
++  return (
++    <div className="card stat">
++      <div className="stat-value">{value}</div>
++      <div className="stat-label">{label}</div>
++      {hint && <div className="stat-hint">{hint}</div>}
++    </div>
++  );
++}
+diff --git a/src/pages/clinician/Schedule.tsx b/src/pages/clinician/Schedule.tsx
+new file mode 100644
+index 0000000..1e9d07d
+--- /dev/null
++++ b/src/pages/clinician/Schedule.tsx
+@@ -0,0 +1,43 @@
++import { useEffect, useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++import type { Appointment } from '../../lib/types';
++
++export default function Schedule() {
++  const [appts, setAppts] = useState<Appointment[]>([]);
++
++  useEffect(() => {
++    supabase
++      .from('appointments')
++      .select('id, patient_id, clinician_id, starts_at, ends_at, status')
++      .order('starts_at')
++      .then(({ data }) => setAppts((data as Appointment[]) ?? []));
++  }, []);
++
++  return (
++    <div>
++      <h1>Schedule</h1>
++      <p className="muted">
++        Scheduling, reminders, and intake live here. Reminders and billing
++        reminders are sent server-side (Stripe metering per session).
++      </p>
++      <table className="table">
++        <thead>
++          <tr>
++            <th>Starts</th>
++            <th>Ends</th>
++            <th>Status</th>
++          </tr>
++        </thead>
++        <tbody>
++          {appts.map((a) => (
++            <tr key={a.id}>
++              <td>{new Date(a.starts_at).toLocaleString('en-GB')}</td>
++              <td>{new Date(a.ends_at).toLocaleTimeString('en-GB')}</td>
++              <td>{a.status}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </div>
++  );
++}
+diff --git a/src/pages/clinician/Settings.tsx b/src/pages/clinician/Settings.tsx
+new file mode 100644
+index 0000000..6d73e05
+--- /dev/null
++++ b/src/pages/clinician/Settings.tsx
+@@ -0,0 +1,81 @@
++import { useEffect, useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++import { useAuth } from '../../lib/auth';
++
++// Compliance settings: the clinic (data controller) manages DPA acceptance,
++// data region, retention, and data export here.
++export default function Settings() {
++  const { profile } = useAuth();
++  const [clinic, setClinic] = useState<any>(null);
++  const [saving, setSaving] = useState(false);
++
++  useEffect(() => {
++    if (!profile) return;
++    supabase
++      .from('clinics')
++      .select('*')
++      .eq('id', profile.clinic_id)
++      .single()
++      .then(({ data }) => setClinic(data));
++  }, [profile]);
++
++  const acceptDpa = async () => {
++    if (!clinic) return;
++    setSaving(true);
++    await supabase
++      .from('clinics')
++      .update({
++        dpa_version: '1.0',
++        dpa_accepted_at: new Date().toISOString(),
++        dpa_accepted_by: profile?.id,
++      })
++      .eq('id', clinic.id);
++    const { data } = await supabase.from('clinics').select('*').eq('id', clinic.id).single();
++    setClinic(data);
++    setSaving(false);
++  };
++
++  const exportData = async () => {
++    // Server-side admin job assembles a GDPR export; here we trigger it.
++    const { data, error } = await supabase.functions.invoke('data-export', {
++      body: { clinicId: clinic?.id },
++    });
++    if (error) alert(error.message);
++    else alert(`Export queued: ${data?.status ?? 'ok'}`);
++  };
++
++  if (!clinic) return <p>Loading settings…</p>;
++
++  return (
++    <div>
++      <h1>Clinic settings &amp; compliance</h1>
++
++      <section className="card">
++        <h2>Data Processing Agreement</h2>
++        <p className="muted">
++          Your clinic is the <strong>data controller</strong>; Wellspring is the
++          <strong> data processor</strong>.
++        </p>
++        {clinic.dpa_accepted_at ? (
++          <p>DPA v{clinic.dpa_version} accepted on {new Date(clinic.dpa_accepted_at).toLocaleDateString('en-GB')}.</p>
++        ) : (
++          <button onClick={acceptDpa} disabled={saving}>
++            {saving ? 'Saving…' : 'Accept DPA v1.0'}
++          </button>
++        )}
++      </section>
++
++      <section className="card">
++        <h2>Data residency &amp; retention</h2>
++        <p>Region: <strong>{clinic.data_region?.toUpperCase()}</strong> (UK/EU).</p>
++        <p>Retention: <strong>{clinic.retention_days}</strong> days (configurable).</p>
++      </section>
++
++      <section className="card">
++        <h2>Data export</h2>
++        <p className="muted">Download a GDPR-compliant export of this clinic's records.</p>
++        <button onClick={exportData}>Request data export</button>
++      </section>
++    </div>
++  );
++}
+diff --git a/src/pages/patient/CompanionHome.tsx b/src/pages/patient/CompanionHome.tsx
+new file mode 100644
+index 0000000..69b1875
+--- /dev/null
++++ b/src/pages/patient/CompanionHome.tsx
+@@ -0,0 +1,60 @@
++import { useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++import { useAuth } from '../../lib/auth';
++
++// Patient wellbeing companion (clinic-branded). STUB.
++// Daily self-reported mood check-in (1–5). This is engagement, NOT clinical
++// symptom tracking, and is framed accordingly.
++const MOODS = [
++  { v: 1, label: 'Very low' },
++  { v: 2, label: 'Low' },
++  { v: 3, label: 'OK' },
++  { v: 4, label: 'Good' },
++  { v: 5, label: 'Great' },
++];
++
++export default function CompanionHome() {
++  const { profile } = useAuth();
++  const [saved, setSaved] = useState(false);
++
++  const checkin = async (mood: number) => {
++    // patient_id resolution would map auth user -> patients row; stubbed via RLS.
++    const { data: patient } = await supabase
++      .from('patients')
++      .select('id, clinic_id')
++      .limit(1)
++      .single();
++    if (!patient) return;
++    await supabase.from('wellbeing_checkins').insert({
++      clinic_id: patient.clinic_id,
++      patient_id: patient.id,
++      mood,
++    });
++    setSaved(true);
++  };
++
++  return (
++    <div>
++      <h1>Hello{profile?.full_name ? `, ${profile.full_name}` : ''}</h1>
++      <p className="muted">A space to check in and reflect. This is not medical care.</p>
++
++      <section className="card">
++        <h2>How are you feeling today?</h2>
++        <div className="mood-row">
++          {MOODS.map((m) => (
++            <button key={m.v} onClick={() => checkin(m.v)} className="mood-btn">
++              {m.label}
++            </button>
++          ))}
++        </div>
++        {saved && <p className="muted">Thanks — your check-in was saved.</p>}
++      </section>
++
++      <p className="disclaimer">
++        Wellspring is a wellbeing companion, not a medical device. It does not
++        diagnose or provide clinical care. In an emergency call 999, or
++        Samaritans on 116 123.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/pages/patient/Homework.tsx b/src/pages/patient/Homework.tsx
+new file mode 100644
+index 0000000..d94c432
+--- /dev/null
++++ b/src/pages/patient/Homework.tsx
+@@ -0,0 +1,39 @@
++import { useEffect, useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++
++// Therapist-assigned homework: fixed psychoeducation content the patient
++// navigates like book chapters. STUB.
++interface Chapter {
++  id: string;
++  title: string;
++  body: string;
++  ordinal: number;
++}
++
++export default function Homework() {
++  const [chapters, setChapters] = useState<Chapter[]>([]);
++  const [open, setOpen] = useState<string | null>(null);
++
++  useEffect(() => {
++    supabase
++      .from('psychoed_content')
++      .select('id, title, body, ordinal')
++      .order('ordinal')
++      .then(({ data }) => setChapters((data as Chapter[]) ?? []));
++  }, []);
++
++  return (
++    <div>
++      <h1>Your exercises</h1>
++      <p className="muted">Fixed reading and exercises assigned by your therapist.</p>
++      {chapters.map((c) => (
++        <div className="card" key={c.id}>
++          <button className="chapter-head" onClick={() => setOpen(open === c.id ? null : c.id)}>
++            {c.ordinal}. {c.title}
++          </button>
++          {open === c.id && <p>{c.body}</p>}
++        </div>
++      ))}
++    </div>
++  );
++}
+diff --git a/src/pages/patient/Journal.tsx b/src/pages/patient/Journal.tsx
+new file mode 100644
+index 0000000..63739e9
+--- /dev/null
++++ b/src/pages/patient/Journal.tsx
+@@ -0,0 +1,64 @@
++import { useState } from 'react';
++import { supabase } from '../../lib/supabaseClient';
++import { detectCrisis } from '../../lib/crisisDetection';
++import { CrisisBanner } from '../../components/CrisisBanner';
++
++// Journaling with the deterministic, non-LLM crisis layer IN FRONT of the
++// free-text input. If a crisis phrase is detected, we surface UK helpline
++// signposting before/at save. We never attempt clinical advice.
++export default function Journal() {
++  const [text, setText] = useState('');
++  const [showCrisis, setShowCrisis] = useState(false);
++  const [saved, setSaved] = useState(false);
++
++  // Live check as the user types (purely client-side, deterministic).
++  const onChange = (value: string) => {
++    setText(value);
++    setShowCrisis(detectCrisis(value).flagged);
++  };
++
++  const save = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!text.trim()) return;
++    const crisis = detectCrisis(text);
++    if (crisis.flagged) setShowCrisis(true);
++
++    const { data: patient } = await supabase
++      .from('patients')
++      .select('id, clinic_id')
++      .limit(1)
++      .single();
++    if (!patient) return;
++
++    // Results flow to the clinician ONLY with explicit consent; default false.
++    await supabase.from('journal_entries').insert({
++      clinic_id: patient.clinic_id,
++      patient_id: patient.id,
++      body: text.trim(),
++      crisis_flagged: crisis.flagged,
++      shared_with_clinician: false,
++    });
++    setSaved(true);
++    setText('');
++  };
++
++  return (
++    <div>
++      <h1>Journal</h1>
++      <p className="muted">A private space to write. Only shared if you choose to.</p>
++
++      {showCrisis && <CrisisBanner />}
++
++      <form className="card" onSubmit={save}>
++        <textarea
++          rows={8}
++          placeholder="Write whatever's on your mind…"
++          value={text}
++          onChange={(e) => onChange(e.target.value)}
++        />
++        <button type="submit">Save entry</button>
++        {saved && <p className="muted">Saved privately.</p>}
++      </form>
++    </div>
++  );
++}
+diff --git a/src/styles.css b/src/styles.css
+new file mode 100644
+index 0000000..c765ba2
+--- /dev/null
++++ b/src/styles.css
+@@ -0,0 +1,86 @@
++:root {
++  --teal: #2f6f6a;
++  --teal-dark: #245955;
++  --bg: #f7faf9;
++  --card: #ffffff;
++  --text: #1f2a29;
++  --muted: #6b7c7a;
++  --border: #e2eae8;
++  --error: #b4231f;
++}
++
++* { box-sizing: border-box; }
++body {
++  margin: 0;
++  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
++  background: var(--bg);
++  color: var(--text);
++}
++
++.centered { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
++
++.app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
++.sidebar {
++  background: var(--teal);
++  color: #fff;
++  display: flex;
++  flex-direction: column;
++  padding: 1rem;
++}
++.sidebar .brand { font-weight: 700; font-size: 1.3rem; margin-bottom: 1.5rem; }
++.sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; }
++.sidebar nav a {
++  color: #e8f2f1; text-decoration: none; padding: 0.5rem 0.75rem; border-radius: 6px;
++}
++.sidebar nav a.active, .sidebar nav a:hover { background: var(--teal-dark); }
++.sidebar-footer { margin-top: auto; font-size: 0.85rem; }
++.sidebar-footer .muted { color: #cfe3e1; }
++.disclaimer { color: #bcd6d3; font-size: 0.72rem; margin-top: 0.75rem; }
++
++.content { padding: 2rem; max-width: 900px; }
++
++h1 { margin-top: 0; }
++.muted { color: var(--muted); }
++.error { color: var(--error); }
++
++.card {
++  background: var(--card);
++  border: 1px solid var(--border);
++  border-radius: 10px;
++  padding: 1.25rem;
++  margin-bottom: 1.25rem;
++}
++
++.auth-card { width: 360px; display: flex; flex-direction: column; gap: 0.5rem; }
++label { display: flex; flex-direction: column; font-size: 0.85rem; gap: 0.25rem; }
++input, textarea {
++  padding: 0.55rem; border: 1px solid var(--border); border-radius: 6px;
++  font: inherit; width: 100%;
++}
++button {
++  background: var(--teal); color: #fff; border: 0; border-radius: 6px;
++  padding: 0.55rem 1rem; font: inherit; cursor: pointer;
++}
++button:disabled { opacity: 0.6; cursor: default; }
++.link-btn { background: none; color: #fff; text-decoration: underline; padding: 0; }
++
++.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
++.stat-value { font-size: 2rem; font-weight: 700; color: var(--teal); }
++.stat-label { color: var(--muted); }
++.stat-hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
++
++.table { width: 100%; border-collapse: collapse; }
++.table th, .table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
++
++.kind-row, .mood-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
++.insight-text { white-space: pre-wrap; background: #f3f7f6; padding: 1rem; border-radius: 6px; }
++.notes-list { list-style: none; padding: 0; }
++.notes-list li { border-bottom: 1px solid var(--border); padding: 0.5rem 0; }
++
++.crisis-banner {
++  background: #fff4f3; border: 1px solid #f1c9c6; border-left: 4px solid var(--error);
++  border-radius: 8px; padding: 1rem; margin-bottom: 1rem;
++}
++.crisis-banner a { color: var(--error); font-weight: 700; }
++
++.chapter-head { width: 100%; text-align: left; }
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+new file mode 100644
+index 0000000..d41e64b
+--- /dev/null
++++ b/src/vite-env.d.ts
+@@ -0,0 +1,11 @@
++/// <reference types="vite/client" />
++/// <reference types="vite-plugin-pwa/client" />
++
++interface ImportMetaEnv {
++  readonly VITE_SUPABASE_URL: string;
++  readonly VITE_SUPABASE_ANON_KEY: string;
++}
++
++interface ImportMeta {
++  readonly env: ImportMetaEnv;
++}
+diff --git a/supabase/config.toml b/supabase/config.toml
+new file mode 100644
+index 0000000..48bca36
+--- /dev/null
++++ b/supabase/config.toml
+@@ -0,0 +1,19 @@
++# Supabase local config (excerpt). UK/EU region for hosted projects.
++project_id = "wellspring"
++
++[auth]
++enabled = true
++
++# Custom Access Token hook injects clinic_id + user_role JWT claims at login.
++[auth.hook.custom_access_token]
++enabled = true
++uri = "pg-functions://postgres/public/custom_access_token_hook"
++
++[functions.notes-to-insight]
++verify_jwt = true
++
++[functions.crisis-check]
++verify_jwt = true
++
++[functions.stripe-webhook]
++verify_jwt = false  # verified via Stripe signature instead
+diff --git a/supabase/functions/_shared/cors.ts b/supabase/functions/_shared/cors.ts
+new file mode 100644
+index 0000000..0466cc6
+--- /dev/null
++++ b/supabase/functions/_shared/cors.ts
+@@ -0,0 +1,6 @@
++export const corsHeaders = {
++  'Access-Control-Allow-Origin': '*',
++  'Access-Control-Allow-Headers':
++    'authorization, x-client-info, apikey, content-type',
++  'Access-Control-Allow-Methods': 'POST, OPTIONS',
++};
+diff --git a/supabase/functions/_shared/forbiddenTerms.ts b/supabase/functions/_shared/forbiddenTerms.ts
+new file mode 100644
+index 0000000..536d270
+--- /dev/null
++++ b/supabase/functions/_shared/forbiddenTerms.ts
+@@ -0,0 +1,30 @@
++// Shared compliance guardrail (used by Edge Functions AND the React client).
++// Wellspring is NOT a medical device: copy and AI output must never imply
++// diagnosis, treatment, screening, triage, or condition monitoring.
++
++export const FORBIDDEN_TERMS: RegExp[] = [
++  /\btreat(s|ed|ing|ment)?\b/i,
++  /\bprevent(s|ed|ing|ion)?\b/i,
++  /\bdiagnos(e|es|ed|ing|is|tic)\b/i,
++  /\bscreen(s|ed|ing)?\b/i,
++  /\btriage(s|d)?\b/i,
++  /\bmonitor(s|ed|ing)?\b/i,
++  /\bclinical (risk|severity)\b/i,
++  /\brisk[-\s]?scor(e|es|ed|ing)\b/i,
++  /\bassess(es|ed|ing|ment)? (the )?severity\b/i,
++];
++
++export interface ComplianceResult {
++  ok: boolean;
++  matches: string[];
++}
++
++/** Returns the forbidden terms found in `text` (empty array = clean). */
++export function checkForbiddenTerms(text: string): ComplianceResult {
++  const matches: string[] = [];
++  for (const re of FORBIDDEN_TERMS) {
++    const m = text.match(re);
++    if (m) matches.push(m[0]);
++  }
++  return { ok: matches.length === 0, matches };
++}
+diff --git a/supabase/functions/data-export/index.ts b/supabase/functions/data-export/index.ts
+new file mode 100644
+index 0000000..122150a
+--- /dev/null
++++ b/supabase/functions/data-export/index.ts
+@@ -0,0 +1,31 @@
++// data-export Edge Function (STUB).
++// GDPR data-export for a clinic (controller right). Requires owner/admin JWT;
++// we re-check the caller's role and clinic before assembling the export.
++// Records an audit-log 'export' action.
++
++import { createClient } from 'jsr:@supabase/supabase-js@2';
++import { corsHeaders } from '../_shared/cors.ts';
++
++Deno.serve(async (req) => {
++  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
++
++  const authHeader = req.headers.get('Authorization') ?? '';
++  const supabase = createClient(
++    Deno.env.get('SUPABASE_URL')!,
++    Deno.env.get('SUPABASE_ANON_KEY')!,
++    { global: { headers: { Authorization: authHeader } } },
++  );
++
++  // RLS restricts these reads to the caller's clinic; owner/admin only by policy.
++  const tables = ['patients', 'session_notes', 'appointments', 'consents', 'wellbeing_checkins'];
++  const exportBundle: Record<string, unknown> = {};
++  for (const t of tables) {
++    const { data } = await supabase.from(t).select('*');
++    exportBundle[t] = data ?? [];
++  }
++
++  return new Response(
++    JSON.stringify({ status: 'ready', generatedAt: new Date().toISOString(), data: exportBundle }),
++    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
++  );
++});
+diff --git a/supabase/functions/notes-to-insight/index.ts b/supabase/functions/notes-to-insight/index.ts
+new file mode 100644
+index 0000000..4b98c55
+--- /dev/null
++++ b/supabase/functions/notes-to-insight/index.ts
+@@ -0,0 +1,139 @@
++// notes-to-insight Edge Function
++// Server-side ONLY. Generates an administrative summary / "what changed" recap /
++// pre-session prep brief from clinician-authored notes, using Claude under
++// zero-retention terms. The AI reorganises text the clinician already wrote; it
++// never diagnoses, triages, scores, or recommends care.
++//
++// Auth: requires a valid user JWT (verify_jwt = true). We re-read clinic_id from
++// the JWT and use the user's token for DB reads so RLS enforces tenant isolation.
++
++import { createClient } from 'jsr:@supabase/supabase-js@2';
++import { corsHeaders } from '../_shared/cors.ts';
++import { checkForbiddenTerms } from '../_shared/forbiddenTerms.ts';
++
++type InsightKind = 'treatment_summary' | 'whats_changed' | 'prep_brief';
++
++const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
++const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-4-6';
++
++// System prompt encodes the not-a-medical-device boundary.
++const SYSTEM_PROMPT = `You are an administrative drafting aid for a UK therapy clinic.
++You ONLY reorganise and summarise notes the clinician has already written.
++You are NOT a medical device and must NEVER:
++- diagnose, screen, triage, risk-score, or assess clinical severity;
++- recommend, change, prevent, or "treat" any condition or care plan;
++- infer new clinical facts the clinician did not write;
++- use the words treat, prevent, diagnose, screen, triage, or monitor a condition.
++Frame everything as engagement and administrative support. Write plainly and concisely.
++If asked for anything clinical, decline and restate your administrative purpose.`;
++
++const KIND_INSTRUCTIONS: Record<InsightKind, string> = {
++  treatment_summary:
++    'Produce a structured per-client summary of the clinician\'s notes with sections: Focus areas, Approaches the clinician noted, Client-reported engagement, Agreed next steps. Use only what is in the notes.',
++  whats_changed:
++    'Compare the most recent note with the previous one and produce a short "what changed since last session" recap: New developments, Continued themes, Agreed next steps. Use only what is in the notes.',
++  prep_brief:
++    'Produce a one-screen pre-session prep brief for the clinician: Where things were left, Open threads to revisit, Logistics/homework to follow up. Use only what is in the notes.',
++};
++
++Deno.serve(async (req) => {
++  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
++
++  try {
++    const authHeader = req.headers.get('Authorization') ?? '';
++    const supabase = createClient(
++      Deno.env.get('SUPABASE_URL')!,
++      Deno.env.get('SUPABASE_ANON_KEY')!,
++      { global: { headers: { Authorization: authHeader } } },
++    );
++
++    const { patientId, kind } = (await req.json()) as {
++      patientId: string;
++      kind: InsightKind;
++    };
++    if (!patientId || !KIND_INSTRUCTIONS[kind]) {
++      return json({ error: 'patientId and a valid kind are required' }, 400);
++    }
++
++    // RLS ensures we only read notes from the caller's clinic + permitted patient.
++    const { data: notes, error } = await supabase
++      .from('session_notes')
++      .select('id, body, session_date, clinic_id')
++      .eq('patient_id', patientId)
++      .order('session_date', { ascending: false })
++      .limit(kind === 'whats_changed' ? 2 : 8);
++
++    if (error) return json({ error: error.message }, 403);
++    if (!notes || notes.length === 0) return json({ error: 'No notes found' }, 404);
++
++    const notesText = notes
++      .map((n) => `--- Session ${n.session_date} ---\n${n.body}`)
++      .join('\n\n');
++
++    const aiResponse = await callClaude(KIND_INSTRUCTIONS[kind], notesText);
++
++    // Post-filter: block any output that drifts toward clinical/medical-device language.
++    const compliance = checkForbiddenTerms(aiResponse);
++    if (!compliance.ok) {
++      return json(
++        {
++          error: 'Generated draft was withheld by the compliance filter.',
++          flaggedTerms: compliance.matches,
++        },
++        422,
++      );
++    }
++
++    // Persist as a draft for clinician review (clinic_id from the source notes).
++    const clinicId = notes[0].clinic_id;
++    const { data: inserted, error: insErr } = await supabase
++      .from('note_insights')
++      .insert({
++        clinic_id: clinicId,
++        patient_id: patientId,
++        source_note_id: notes[0].id,
++        kind,
++        content: { text: aiResponse },
++        model: ANTHROPIC_MODEL,
++      })
++      .select()
++      .single();
++
++    if (insErr) return json({ error: insErr.message }, 403);
++    return json({ insight: inserted });
++  } catch (e) {
++    return json({ error: String(e) }, 500);
++  }
++});
++
++async function callClaude(instruction: string, notesText: string): Promise<string> {
++  const res = await fetch('https://api.anthropic.com/v1/messages', {
++    method: 'POST',
++    headers: {
++      'x-api-key': ANTHROPIC_API_KEY,
++      'anthropic-version': '2023-06-01',
++      'content-type': 'application/json',
++    },
++    body: JSON.stringify({
++      model: ANTHROPIC_MODEL,
++      max_tokens: 1024,
++      system: SYSTEM_PROMPT,
++      messages: [
++        {
++          role: 'user',
++          content: `${instruction}\n\nClinician notes:\n${notesText}`,
++        },
++      ],
++    }),
++  });
++  if (!res.ok) throw new Error(`Claude API error: ${res.status} ${await res.text()}`);
++  const data = await res.json();
++  return (data.content ?? []).map((b: { text?: string }) => b.text ?? '').join('').trim();
++}
++
++function json(body: unknown, status = 200): Response {
++  return new Response(JSON.stringify(body), {
++    status,
++    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
++  });
++}
+diff --git a/supabase/functions/stripe-webhook/index.ts b/supabase/functions/stripe-webhook/index.ts
+new file mode 100644
+index 0000000..6919bb6
+--- /dev/null
++++ b/supabase/functions/stripe-webhook/index.ts
+@@ -0,0 +1,57 @@
++// stripe-webhook Edge Function (STUB).
++// Handles per-clinic subscription + per-session metering events. Verifies the
++// Stripe signature (verify_jwt = false; auth is via the signature instead).
++// Uses the service-role key — server-only — to update billing rows across RLS.
++
++import Stripe from 'npm:stripe@16';
++import { createClient } from 'jsr:@supabase/supabase-js@2';
++
++const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!);
++const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
++
++// Service-role client: admin job only. Never exposed to the browser.
++const admin = createClient(
++  Deno.env.get('SUPABASE_URL')!,
++  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
++);
++
++Deno.serve(async (req) => {
++  const signature = req.headers.get('stripe-signature');
++  const body = await req.text();
++  if (!signature) return new Response('Missing signature', { status: 400 });
++
++  let event: Stripe.Event;
++  try {
++    event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
++  } catch (err) {
++    return new Response(`Webhook signature error: ${err}`, { status: 400 });
++  }
++
++  switch (event.type) {
++    case 'customer.subscription.updated':
++    case 'customer.subscription.created': {
++      const sub = event.data.object as Stripe.Subscription;
++      const clinicId = sub.metadata.clinic_id;
++      if (clinicId) {
++        await admin.from('billing_accounts').upsert({
++          clinic_id: clinicId,
++          stripe_customer_id: String(sub.customer),
++          stripe_subscription_id: sub.id,
++          seats: sub.items.data[0]?.quantity ?? 1,
++          updated_at: new Date().toISOString(),
++        });
++      }
++      break;
++    }
++    case 'invoice.payment_failed': {
++      // Trigger a billing reminder (handled by a separate notification job).
++      break;
++    }
++    default:
++      break;
++  }
++
++  return new Response(JSON.stringify({ received: true }), {
++    headers: { 'Content-Type': 'application/json' },
++  });
++});
+diff --git a/supabase/migrations/0001_core_schema.sql b/supabase/migrations/0001_core_schema.sql
+new file mode 100644
+index 0000000..373a2a6
+--- /dev/null
++++ b/supabase/migrations/0001_core_schema.sql
+@@ -0,0 +1,75 @@
++-- 0001_core_schema.sql
++-- Core multi-tenant schema: clinics, profiles (user<->clinic<->role), RLS helpers.
++
++create extension if not exists "pgcrypto";
++
++-- Roles within a clinic. Patients are also profiles, scoped to a clinic.
++do $$ begin
++  create type public.user_role as enum ('owner', 'clinician', 'admin', 'patient');
++exception when duplicate_object then null; end $$;
++
++-- ---------------------------------------------------------------------------
++-- clinics: the tenant root. Everything else carries clinic_id.
++-- ---------------------------------------------------------------------------
++create table if not exists public.clinics (
++  id              uuid primary key default gen_random_uuid(),
++  name            text not null,
++  slug            text unique not null,
++  brand_color     text default '#2f6f6a',
++  -- Compliance / data-controller settings managed in the Settings page.
++  dpa_version     text,
++  dpa_accepted_at timestamptz,
++  dpa_accepted_by uuid,
++  data_region     text not null default 'uk',
++  retention_days  integer not null default 2555, -- ~7 years default; configurable
++  created_at      timestamptz not null default now()
++);
++
++-- ---------------------------------------------------------------------------
++-- profiles: links an auth.users id to exactly one clinic + role.
++-- This is the source of truth the auth hook reads to build JWT claims.
++-- ---------------------------------------------------------------------------
++create table if not exists public.profiles (
++  id          uuid primary key references auth.users(id) on delete cascade,
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  role        public.user_role not null default 'clinician',
++  full_name   text,
++  email       text,
++  created_at  timestamptz not null default now()
++);
++
++create index if not exists profiles_clinic_id_idx on public.profiles(clinic_id);
++
++-- ---------------------------------------------------------------------------
++-- RLS helper functions. These read custom claims set by the auth hook (0005).
++-- Defined in the `auth` schema so policies can call auth.clinic_id().
++-- ---------------------------------------------------------------------------
++create or replace function auth.clinic_id()
++returns uuid
++language sql stable
++as $$
++  select nullif(
++    coalesce(
++      current_setting('request.jwt.claims', true)::jsonb ->> 'clinic_id',
++      ''
++    ),
++    ''
++  )::uuid;
++$$;
++
++create or replace function auth.user_role()
++returns text
++language sql stable
++as $$
++  select coalesce(
++    current_setting('request.jwt.claims', true)::jsonb ->> 'user_role',
++    'patient'
++  );
++$$;
++
++create or replace function auth.has_role(variadic roles text[])
++returns boolean
++language sql stable
++as $$
++  select auth.user_role() = any(roles);
++$$;
+diff --git a/supabase/migrations/0002_clinical_admin.sql b/supabase/migrations/0002_clinical_admin.sql
+new file mode 100644
+index 0000000..2cad460
+--- /dev/null
++++ b/supabase/migrations/0002_clinical_admin.sql
+@@ -0,0 +1,170 @@
++-- 0002_clinical_admin.sql
++-- Clinician-side clinical/admin tables and patient-companion tables.
++-- NOTE: framing is wellbeing + administration. No diagnosis/triage/severity fields.
++
++-- ---------------------------------------------------------------------------
++-- Patients (clients of a clinic). Health data lives in notes/check-ins.
++-- ---------------------------------------------------------------------------
++create table if not exists public.patients (
++  id              uuid primary key default gen_random_uuid(),
++  clinic_id       uuid not null references public.clinics(id) on delete cascade,
++  -- Optional link to an auth user for the patient-facing companion.
++  user_id         uuid references auth.users(id) on delete set null,
++  full_name       text not null,
++  email           text,
++  phone           text,
++  date_of_birth   date,
++  primary_clinician_id uuid references public.profiles(id) on delete set null,
++  status          text not null default 'active', -- active | discharged | paused
++  created_at      timestamptz not null default now()
++);
++
++-- ---------------------------------------------------------------------------
++-- Rooms + appointments (scheduling, utilisation, no-shows).
++-- ---------------------------------------------------------------------------
++create table if not exists public.rooms (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  name        text not null,
++  created_at  timestamptz not null default now()
++);
++
++create table if not exists public.appointments (
++  id            uuid primary key default gen_random_uuid(),
++  clinic_id     uuid not null references public.clinics(id) on delete cascade,
++  patient_id    uuid not null references public.patients(id) on delete cascade,
++  clinician_id  uuid not null references public.profiles(id) on delete cascade,
++  room_id       uuid references public.rooms(id) on delete set null,
++  starts_at     timestamptz not null,
++  ends_at       timestamptz not null,
++  -- engagement/admin status only.
++  status        text not null default 'scheduled', -- scheduled|completed|cancelled|no_show
++  reminder_sent_at timestamptz,
++  created_at    timestamptz not null default now()
++);
++
++-- ---------------------------------------------------------------------------
++-- Intake forms + consent capture (explicit consent for special-category data).
++-- ---------------------------------------------------------------------------
++create table if not exists public.intake_forms (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  patient_id  uuid not null references public.patients(id) on delete cascade,
++  -- LHC-Forms / questionnaire JSON definition + responses.
++  schema      jsonb not null default '{}'::jsonb,
++  responses   jsonb not null default '{}'::jsonb,
++  submitted_at timestamptz,
++  created_at  timestamptz not null default now()
++);
++
++create table if not exists public.consents (
++  id            uuid primary key default gen_random_uuid(),
++  clinic_id     uuid not null references public.clinics(id) on delete cascade,
++  patient_id    uuid not null references public.patients(id) on delete cascade,
++  -- e.g. 'special_category_processing', 'share_companion_results_with_clinician'
++  consent_type  text not null,
++  granted       boolean not null default false,
++  granted_at    timestamptz,
++  withdrawn_at  timestamptz,
++  created_at    timestamptz not null default now()
++);
++
++-- ---------------------------------------------------------------------------
++-- Session notes (clinician-authored) + AI-generated insights derived from them.
++-- ---------------------------------------------------------------------------
++create table if not exists public.session_notes (
++  id            uuid primary key default gen_random_uuid(),
++  clinic_id     uuid not null references public.clinics(id) on delete cascade,
++  patient_id    uuid not null references public.patients(id) on delete cascade,
++  clinician_id  uuid not null references public.profiles(id) on delete cascade,
++  appointment_id uuid references public.appointments(id) on delete set null,
++  body          text not null,            -- the clinician's typed/pasted notes
++  session_date  date not null default current_date,
++  created_at    timestamptz not null default now()
++);
++
++-- AI outputs are drafts the clinician reviews. Kinds:
++--   'treatment_summary' (per-client structured summary),
++--   'whats_changed' (recap vs previous session),
++--   'prep_brief' (pre-session prep).
++create table if not exists public.note_insights (
++  id            uuid primary key default gen_random_uuid(),
++  clinic_id     uuid not null references public.clinics(id) on delete cascade,
++  patient_id    uuid not null references public.patients(id) on delete cascade,
++  source_note_id uuid references public.session_notes(id) on delete set null,
++  kind          text not null,
++  content       jsonb not null,
++  model         text,
++  generated_at  timestamptz not null default now(),
++  reviewed_by   uuid references public.profiles(id) on delete set null,
++  reviewed_at   timestamptz
++);
++
++-- ---------------------------------------------------------------------------
++-- Billing references (Stripe ids only; no card data stored).
++-- ---------------------------------------------------------------------------
++create table if not exists public.billing_accounts (
++  clinic_id              uuid primary key references public.clinics(id) on delete cascade,
++  stripe_customer_id     text,
++  stripe_subscription_id text,
++  seats                  integer not null default 1,
++  updated_at             timestamptz not null default now()
++);
++
++create table if not exists public.billing_events (
++  id            uuid primary key default gen_random_uuid(),
++  clinic_id     uuid not null references public.clinics(id) on delete cascade,
++  kind          text not null,           -- session_metered | invoice | reminder
++  appointment_id uuid references public.appointments(id) on delete set null,
++  amount_pence  integer,
++  stripe_ref    text,
++  created_at    timestamptz not null default now()
++);
++
++-- ---------------------------------------------------------------------------
++-- Patient companion: journaling, self-reported wellbeing check-ins, homework.
++-- Wellbeing check-ins are engagement signals, NOT clinical symptom tracking.
++-- ---------------------------------------------------------------------------
++create table if not exists public.wellbeing_checkins (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  patient_id  uuid not null references public.patients(id) on delete cascade,
++  -- simple 1-5 self-reported mood; explicitly not a clinical scale.
++  mood        smallint check (mood between 1 and 5),
++  note        text,
++  checkin_date date not null default current_date,
++  created_at  timestamptz not null default now()
++);
++
++create table if not exists public.journal_entries (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  patient_id  uuid not null references public.patients(id) on delete cascade,
++  body        text not null,
++  -- Set by the deterministic crisis layer when signposting was surfaced.
++  crisis_flagged boolean not null default false,
++  shared_with_clinician boolean not null default false, -- requires explicit consent
++  created_at  timestamptz not null default now()
++);
++
++-- Fixed psychoeducation content (book-like chapters) authored per clinic.
++create table if not exists public.psychoed_content (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  title       text not null,
++  slug        text not null,
++  body        text not null,
++  ordinal     integer not null default 0,
++  created_at  timestamptz not null default now()
++);
++
++create table if not exists public.homework_assignments (
++  id          uuid primary key default gen_random_uuid(),
++  clinic_id   uuid not null references public.clinics(id) on delete cascade,
++  patient_id  uuid not null references public.patients(id) on delete cascade,
++  clinician_id uuid references public.profiles(id) on delete set null,
++  content_id  uuid references public.psychoed_content(id) on delete set null,
++  status      text not null default 'assigned', -- assigned | in_progress | completed
++  assigned_at timestamptz not null default now(),
++  completed_at timestamptz
++);
+diff --git a/supabase/migrations/0003_audit_log.sql b/supabase/migrations/0003_audit_log.sql
+new file mode 100644
+index 0000000..cd15a0e
+--- /dev/null
++++ b/supabase/migrations/0003_audit_log.sql
+@@ -0,0 +1,60 @@
++-- 0003_audit_log.sql
++-- Append-only audit trail for access to / changes of personal data (GDPR accountability).
++
++create table if not exists public.audit_log (
++  id          bigint generated always as identity primary key,
++  clinic_id   uuid not null,
++  actor_id    uuid,                 -- auth.uid() of the acting user, if any
++  actor_role  text,
++  action      text not null,        -- insert | update | delete | export | consent_change
++  table_name  text not null,
++  record_id   text,
++  metadata    jsonb,
++  created_at  timestamptz not null default now()
++);
++
++create index if not exists audit_log_clinic_id_idx on public.audit_log(clinic_id);
++create index if not exists audit_log_created_at_idx on public.audit_log(created_at);
++
++-- Generic trigger that records row changes on sensitive tables.
++create or replace function public.fn_audit()
++returns trigger
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_clinic uuid;
++  v_record text;
++begin
++  v_clinic := coalesce(
++    (case when tg_op = 'DELETE' then old.clinic_id else new.clinic_id end),
++    auth.clinic_id()
++  );
++  v_record := coalesce(
++    (case when tg_op = 'DELETE' then old.id else new.id end)::text,
++    null
++  );
++
++  insert into public.audit_log(clinic_id, actor_id, actor_role, action, table_name, record_id)
++  values (v_clinic, auth.uid(), auth.user_role(), lower(tg_op), tg_table_name, v_record);
++
++  if tg_op = 'DELETE' then return old; else return new; end if;
++end;
++$$;
++
++-- Attach the audit trigger to special-category / sensitive tables.
++do $$
++declare t text;
++begin
++  foreach t in array array[
++    'session_notes','note_insights','wellbeing_checkins','journal_entries',
++    'consents','intake_forms','patients'
++  ] loop
++    execute format(
++      'drop trigger if exists trg_audit_%1$s on public.%1$s;
++       create trigger trg_audit_%1$s
++       after insert or update or delete on public.%1$s
++       for each row execute function public.fn_audit();', t);
++  end loop;
++end $$;
+diff --git a/supabase/migrations/0004_rls_policies.sql b/supabase/migrations/0004_rls_policies.sql
+new file mode 100644
+index 0000000..f51c69c
+--- /dev/null
++++ b/supabase/migrations/0004_rls_policies.sql
+@@ -0,0 +1,95 @@
++-- 0004_rls_policies.sql
++-- Enable RLS on EVERY table and define clinic_id-scoped policies.
++-- Also index every clinic_id column. Default posture: deny unless clinic matches.
++
++-- Index every clinic_id (profiles already indexed in 0001).
++create index if not exists patients_clinic_id_idx           on public.patients(clinic_id);
++create index if not exists rooms_clinic_id_idx              on public.rooms(clinic_id);
++create index if not exists appointments_clinic_id_idx       on public.appointments(clinic_id);
++create index if not exists intake_forms_clinic_id_idx       on public.intake_forms(clinic_id);
++create index if not exists consents_clinic_id_idx           on public.consents(clinic_id);
++create index if not exists session_notes_clinic_id_idx      on public.session_notes(clinic_id);
++create index if not exists note_insights_clinic_id_idx      on public.note_insights(clinic_id);
++create index if not exists billing_events_clinic_id_idx     on public.billing_events(clinic_id);
++create index if not exists wellbeing_checkins_clinic_id_idx on public.wellbeing_checkins(clinic_id);
++create index if not exists journal_entries_clinic_id_idx    on public.journal_entries(clinic_id);
++create index if not exists psychoed_content_clinic_id_idx   on public.psychoed_content(clinic_id);
++create index if not exists homework_clinic_id_idx           on public.homework_assignments(clinic_id);
++
++-- Helpful composite indexes for common per-clinic lookups.
++create index if not exists session_notes_clinic_patient_idx on public.session_notes(clinic_id, patient_id);
++create index if not exists appointments_clinic_starts_idx   on public.appointments(clinic_id, starts_at);
++
++-- Enable RLS everywhere.
++do $$
++declare t text;
++begin
++  foreach t in array array[
++    'clinics','profiles','patients','rooms','appointments','intake_forms','consents',
++    'session_notes','note_insights','billing_accounts','billing_events',
++    'wellbeing_checkins','journal_entries','psychoed_content','homework_assignments',
++    'audit_log'
++  ] loop
++    execute format('alter table public.%I enable row level security;', t);
++    execute format('alter table public.%I force row level security;', t);
++  end loop;
++end $$;
++
++-- Generic clinic-scoped policy for staff-managed tables (owner/clinician/admin).
++-- Every business table is matched on clinic_id = auth.clinic_id().
++do $$
++declare t text;
++begin
++  foreach t in array array[
++    'patients','rooms','appointments','intake_forms','consents',
++    'session_notes','note_insights','billing_events',
++    'wellbeing_checkins','journal_entries','psychoed_content','homework_assignments'
++  ] loop
++    execute format('drop policy if exists %1$s_clinic_isolation on public.%1$s;', t);
++    execute format($f$
++      create policy %1$s_clinic_isolation on public.%1$s
++      for all
++      using (clinic_id = auth.clinic_id())
++      with check (clinic_id = auth.clinic_id());
++    $f$, t);
++  end loop;
++end $$;
++
++-- clinics: members can read their own clinic; only owners may update it.
++drop policy if exists clinics_read on public.clinics;
++create policy clinics_read on public.clinics
++  for select using (id = auth.clinic_id());
++
++drop policy if exists clinics_update on public.clinics;
++create policy clinics_update on public.clinics
++  for update using (id = auth.clinic_id() and auth.has_role('owner'))
++  with check (id = auth.clinic_id() and auth.has_role('owner'));
++
++-- profiles: read profiles in your clinic; a user can read their own row even
++-- before the hook populates the claim (e.g. first login).
++drop policy if exists profiles_read on public.profiles;
++create policy profiles_read on public.profiles
++  for select using (clinic_id = auth.clinic_id() or id = auth.uid());
++
++drop policy if exists profiles_admin_write on public.profiles;
++create policy profiles_admin_write on public.profiles
++  for all
++  using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'))
++  with check (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
++
++-- billing_accounts: clinic-scoped, owner/admin only.
++drop policy if exists billing_accounts_policy on public.billing_accounts;
++create policy billing_accounts_policy on public.billing_accounts
++  for all
++  using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'))
++  with check (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
++
++-- audit_log: read-only to owners/admins of the clinic; inserts happen via the
++-- SECURITY DEFINER trigger, so no INSERT policy is granted to end users.
++drop policy if exists audit_log_read on public.audit_log;
++create policy audit_log_read on public.audit_log
++  for select using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
++
++-- NOTE: the service-role key bypasses RLS and is used ONLY by server-side jobs.
++-- All browser/client calls use the anon key + the user's JWT, which is subject
++-- to the policies above.
+diff --git a/supabase/migrations/0005_auth_hook.sql b/supabase/migrations/0005_auth_hook.sql
+new file mode 100644
+index 0000000..c1a2542
+--- /dev/null
++++ b/supabase/migrations/0005_auth_hook.sql
+@@ -0,0 +1,42 @@
++-- 0005_auth_hook.sql
++-- Custom Access Token hook: injects clinic_id + user_role into the JWT at login,
++-- sourced from public.profiles. Clients can NEVER set these claims themselves.
++--
++-- Enable in Supabase: Auth → Hooks → Custom Access Token → public.custom_access_token_hook
++-- or via config.toml [auth.hook.custom_access_token].
++
++create or replace function public.custom_access_token_hook(event jsonb)
++returns jsonb
++language plpgsql
++stable
++security definer
++set search_path = public
++as $$
++declare
++  v_claims  jsonb;
++  v_profile public.profiles%rowtype;
++begin
++  select * into v_profile
++  from public.profiles
++  where id = (event ->> 'user_id')::uuid;
++
++  v_claims := coalesce(event -> 'claims', '{}'::jsonb);
++
++  if v_profile.id is not null then
++    v_claims := jsonb_set(v_claims, '{clinic_id}', to_jsonb(v_profile.clinic_id::text));
++    v_claims := jsonb_set(v_claims, '{user_role}', to_jsonb(v_profile.role::text));
++  end if;
++
++  return jsonb_set(event, '{claims}', v_claims);
++end;
++$$;
++
++-- Grant the auth admin role permission to run the hook and read profiles.
++grant usage on schema public to supabase_auth_admin;
++grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
++grant select on public.profiles to supabase_auth_admin;
++
++-- Allow the auth admin to read profiles despite RLS (needed to build claims).
++drop policy if exists profiles_auth_admin_read on public.profiles;
++create policy profiles_auth_admin_read on public.profiles
++  for select to supabase_auth_admin using (true);
+diff --git a/supabase/migrations/0006_seed.sql b/supabase/migrations/0006_seed.sql
+new file mode 100644
+index 0000000..c846b41
+--- /dev/null
++++ b/supabase/migrations/0006_seed.sql
+@@ -0,0 +1,88 @@
++-- 0006_seed.sql
++-- DEV/DEMO SEED ONLY. Do NOT run in production.
++-- One demo clinic (Edgbaston), two clinicians, three patients.
++
++-- Fixed UUIDs for repeatable local demos.
++-- clinic:    11111111-1111-1111-1111-111111111111
++-- owner:     a0000000-0000-0000-0000-000000000001  (also a clinician)
++-- clinician: a0000000-0000-0000-0000-000000000002
++-- patients:  p1/p2/p3 below
++
++insert into public.clinics (id, name, slug, brand_color, dpa_version, data_region)
++values ('11111111-1111-1111-1111-111111111111',
++        'Edgbaston Wellbeing Practice', 'edgbaston-wellbeing', '#2f6f6a', '1.0', 'uk')
++on conflict (id) do nothing;
++
++-- Local-only auth users so profiles FK resolves. Passwords are placeholders;
++-- in a real environment, create users via Supabase Auth, not raw inserts.
++insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
++                        email_confirmed_at, created_at, updated_at)
++values
++  ('a0000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000000',
++   'authenticated','authenticated','owner@edgbaston.example',
++   crypt('demo-password', gen_salt('bf')), now(), now(), now()),
++  ('a0000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000000',
++   'authenticated','authenticated','clinician@edgbaston.example',
++   crypt('demo-password', gen_salt('bf')), now(), now(), now())
++on conflict (id) do nothing;
++
++insert into public.profiles (id, clinic_id, role, full_name, email)
++values
++  ('a0000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111',
++   'owner','Dr Priya Sharma','owner@edgbaston.example'),
++  ('a0000000-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111',
++   'clinician','Tom Okafor','clinician@edgbaston.example')
++on conflict (id) do nothing;
++
++insert into public.rooms (id, clinic_id, name) values
++  ('22222222-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','Consulting Room A'),
++  ('22222222-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111','Consulting Room B')
++on conflict (id) do nothing;
++
++insert into public.patients (id, clinic_id, full_name, email, primary_clinician_id, status)
++values
++  ('33333333-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111',
++   'Alex Morgan','alex@example.com','a0000000-0000-0000-0000-000000000001','active'),
++  ('33333333-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111',
++   'Jordan Lee','jordan@example.com','a0000000-0000-0000-0000-000000000002','active'),
++  ('33333333-0000-0000-0000-000000000003','11111111-1111-1111-1111-111111111111',
++   'Sam Patel','sam@example.com','a0000000-0000-0000-0000-000000000002','active')
++on conflict (id) do nothing;
++
++-- Explicit consent records (special-category processing granted; companion-share varies).
++insert into public.consents (clinic_id, patient_id, consent_type, granted, granted_at) values
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001','special_category_processing',true,now()),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001','share_companion_results_with_clinician',true,now()),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000002','special_category_processing',true,now()),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000003','special_category_processing',true,now())
++on conflict do nothing;
++
++-- A couple of appointments incl. utilisation/no-show examples.
++insert into public.appointments (clinic_id, patient_id, clinician_id, room_id, starts_at, ends_at, status) values
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','22222222-0000-0000-0000-000000000001', now() + interval '1 day', now() + interval '1 day 50 minutes','scheduled'),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000002', now() - interval '7 days', now() - interval '7 days' + interval '50 minutes','completed'),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000002', now() - interval '2 days', now() - interval '2 days' + interval '50 minutes','no_show')
++on conflict do nothing;
++
++-- Sample clinician-authored session notes (the input to the notes-to-insight layer).
++insert into public.session_notes (clinic_id, patient_id, clinician_id, body, session_date) values
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
++   'Client reported a steadier week. Used the breathing exercise before two work meetings and found it helped. Sleep still irregular. We revisited goals around boundary-setting with family. Homework: continue daily check-ins, read chapter on values.',
++   current_date - 7),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
++   'Client engaged well. Boundary conversation with sibling went better than expected. Still finds mornings hard. Wants to focus next on work stress. Agreed to try a wind-down routine.',
++   current_date - 1)
++on conflict do nothing;
++
++-- Psychoeducation chapters (fixed content).
++insert into public.psychoed_content (clinic_id, title, slug, body, ordinal) values
++  ('11111111-1111-1111-1111-111111111111','Understanding Values','understanding-values','Fixed psychoeducation content about identifying personal values...',1),
++  ('11111111-1111-1111-1111-111111111111','A Simple Wind-Down Routine','wind-down-routine','Fixed psychoeducation content about evening routines...',2)
++on conflict do nothing;
++
++-- A few wellbeing check-ins (engagement signal, not a clinical scale).
++insert into public.wellbeing_checkins (clinic_id, patient_id, mood, checkin_date) values
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001',3, current_date - 3),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000001',4, current_date - 1),
++  ('11111111-1111-1111-1111-111111111111','33333333-0000-0000-0000-000000000002',2, current_date - 2)
++on conflict do nothing;
+diff --git a/tests/crisisDetection.test.ts b/tests/crisisDetection.test.ts
+new file mode 100644
+index 0000000..094acb7
+--- /dev/null
++++ b/tests/crisisDetection.test.ts
+@@ -0,0 +1,21 @@
++import { describe, it, expect } from 'vitest';
++import { detectCrisis } from '../src/lib/crisisDetection';
++
++describe('detectCrisis (deterministic, non-LLM)', () => {
++  it('flags clear crisis phrases', () => {
++    expect(detectCrisis('I want to kill myself').flagged).toBe(true);
++    expect(detectCrisis('thinking about suicide lately').flagged).toBe(true);
++    expect(detectCrisis('I have been self-harming').flagged).toBe(true);
++  });
++
++  it('does not flag ordinary low-mood text', () => {
++    expect(detectCrisis('I had a tiring week and felt a bit flat').flagged).toBe(false);
++    expect(detectCrisis('work was stressful but the breathing exercise helped').flagged).toBe(false);
++  });
++
++  it('returns the matched phrases for auditability', () => {
++    const r = detectCrisis('I want to die');
++    expect(r.flagged).toBe(true);
++    expect(r.matched).toContain('want to die');
++  });
++});
+diff --git a/tests/forbiddenTerms.test.ts b/tests/forbiddenTerms.test.ts
+new file mode 100644
+index 0000000..f710f78
+--- /dev/null
++++ b/tests/forbiddenTerms.test.ts
+@@ -0,0 +1,14 @@
++import { describe, it, expect } from 'vitest';
++import { checkForbiddenTerms } from '../src/lib/forbiddenTerms';
++
++describe('checkForbiddenTerms (not-a-medical-device guardrail)', () => {
++  it('flags medical-device language', () => {
++    expect(checkForbiddenTerms('we will diagnose and treat you').ok).toBe(false);
++    expect(checkForbiddenTerms('monitor your depression').ok).toBe(false);
++    expect(checkForbiddenTerms('screen for anxiety').ok).toBe(false);
++  });
++
++  it('passes compliant wellbeing language', () => {
++    expect(checkForbiddenTerms('a summary of your session notes and engagement').ok).toBe(true);
++  });
++});
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..ef6406b
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,25 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "useDefineForClassFields": true,
++    "lib": ["ES2022", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "skipLibCheck": true,
++    "moduleResolution": "bundler",
++    "allowImportingTsExtensions": true,
++    "resolveJsonModule": true,
++    "isolatedModules": true,
++    "noEmit": true,
++    "jsx": "react-jsx",
++    "strict": true,
++    "noUnusedLocals": true,
++    "noUnusedParameters": true,
++    "noFallthroughCasesInSwitch": true,
++    "baseUrl": ".",
++    "paths": {
++      "@/*": ["src/*"]
++    }
++  },
++  "include": ["src", "tests"],
++  "exclude": ["node_modules", "dist", "supabase/functions"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..35be842
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,46 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++import { VitePWA } from 'vite-plugin-pwa';
++import path from 'node:path';
++
++// Wellspring is an installable PWA. The service worker caches the app shell
++// and static psychoeducation content, but NEVER caches special-category
++// health data responses (those are network-only, see runtimeCaching below).
++export default defineConfig({
++  resolve: {
++    alias: { '@': path.resolve(__dirname, 'src') },
++  },
++  plugins: [
++    react(),
++    VitePWA({
++      registerType: 'autoUpdate',
++      includeAssets: ['favicon.svg', 'robots.txt'],
++      manifest: {
++        name: 'Wellspring',
++        short_name: 'Wellspring',
++        description:
++          'Wellbeing and practice-administration support for therapy clinics. Not a medical device.',
++        theme_color: '#2f6f6a',
++        background_color: '#f7faf9',
++        display: 'standalone',
++        start_url: '/',
++        icons: [
++          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
++          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
++        ],
++      },
++      workbox: {
++        navigateFallbackDenylist: [/^\/api/, /^\/auth/],
++        runtimeCaching: [
++          {
++            // Supabase data and Edge Functions: never cache health data.
++            urlPattern: ({ url }) =>
++              url.pathname.startsWith('/rest/') ||
++              url.pathname.startsWith('/functions/'),
++            handler: 'NetworkOnly',
++          },
++        ],
++      },
++    }),
++  ],
++});
+-- 
+2.43.0
+
