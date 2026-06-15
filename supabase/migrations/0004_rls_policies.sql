@@ -36,7 +36,7 @@ begin
 end $$;
 
 -- Generic clinic-scoped policy for staff-managed tables (owner/clinician/admin).
--- Every business table is matched on clinic_id = auth.clinic_id().
+-- Every business table is matched on clinic_id = public.clinic_id().
 do $$
 declare t text;
 begin
@@ -49,8 +49,8 @@ begin
     execute format($f$
       create policy %1$s_clinic_isolation on public.%1$s
       for all
-      using (clinic_id = auth.clinic_id())
-      with check (clinic_id = auth.clinic_id());
+      using (clinic_id = public.clinic_id())
+      with check (clinic_id = public.clinic_id());
     $f$, t);
   end loop;
 end $$;
@@ -58,37 +58,37 @@ end $$;
 -- clinics: members can read their own clinic; only owners may update it.
 drop policy if exists clinics_read on public.clinics;
 create policy clinics_read on public.clinics
-  for select using (id = auth.clinic_id());
+  for select using (id = public.clinic_id());
 
 drop policy if exists clinics_update on public.clinics;
 create policy clinics_update on public.clinics
-  for update using (id = auth.clinic_id() and auth.has_role('owner'))
-  with check (id = auth.clinic_id() and auth.has_role('owner'));
+  for update using (id = public.clinic_id() and public.has_role('owner'))
+  with check (id = public.clinic_id() and public.has_role('owner'));
 
 -- profiles: read profiles in your clinic; a user can read their own row even
 -- before the hook populates the claim (e.g. first login).
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles
-  for select using (clinic_id = auth.clinic_id() or id = auth.uid());
+  for select using (clinic_id = public.clinic_id() or id = auth.uid());
 
 drop policy if exists profiles_admin_write on public.profiles;
 create policy profiles_admin_write on public.profiles
   for all
-  using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'))
-  with check (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
+  using (clinic_id = public.clinic_id() and public.has_role('owner','admin'))
+  with check (clinic_id = public.clinic_id() and public.has_role('owner','admin'));
 
 -- billing_accounts: clinic-scoped, owner/admin only.
 drop policy if exists billing_accounts_policy on public.billing_accounts;
 create policy billing_accounts_policy on public.billing_accounts
   for all
-  using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'))
-  with check (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
+  using (clinic_id = public.clinic_id() and public.has_role('owner','admin'))
+  with check (clinic_id = public.clinic_id() and public.has_role('owner','admin'));
 
 -- audit_log: read-only to owners/admins of the clinic; inserts happen via the
 -- SECURITY DEFINER trigger, so no INSERT policy is granted to end users.
 drop policy if exists audit_log_read on public.audit_log;
 create policy audit_log_read on public.audit_log
-  for select using (clinic_id = auth.clinic_id() and auth.has_role('owner','admin'));
+  for select using (clinic_id = public.clinic_id() and public.has_role('owner','admin'));
 
 -- NOTE: the service-role key bypasses RLS and is used ONLY by server-side jobs.
 -- All browser/client calls use the anon key + the user's JWT, which is subject

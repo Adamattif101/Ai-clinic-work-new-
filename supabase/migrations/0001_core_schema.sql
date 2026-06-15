@@ -42,9 +42,9 @@ create index if not exists profiles_clinic_id_idx on public.profiles(clinic_id);
 
 -- ---------------------------------------------------------------------------
 -- RLS helper functions. These read custom claims set by the auth hook (0005).
--- Defined in the `auth` schema so policies can call auth.clinic_id().
+-- Defined in the `auth` schema so policies can call public.clinic_id().
 -- ---------------------------------------------------------------------------
-create or replace function auth.clinic_id()
+create or replace function public.clinic_id()
 returns uuid
 language sql stable
 as $$
@@ -57,7 +57,7 @@ as $$
   )::uuid;
 $$;
 
-create or replace function auth.user_role()
+create or replace function public.jwt_role()
 returns text
 language sql stable
 as $$
@@ -67,9 +67,9 @@ as $$
   );
 $$;
 
-create or replace function auth.has_role(variadic roles text[])
+create or replace function public.has_role(variadic roles text[])
 returns boolean
 language sql stable
 as $$
-  select auth.user_role() = any(roles);
+  select public.jwt_role() = any(roles);
 $$;

@@ -29,7 +29,7 @@ declare
 begin
   v_clinic := coalesce(
     (case when tg_op = 'DELETE' then old.clinic_id else new.clinic_id end),
-    auth.clinic_id()
+    public.clinic_id()
   );
   v_record := coalesce(
     (case when tg_op = 'DELETE' then old.id else new.id end)::text,
@@ -37,7 +37,7 @@ begin
   );
 
   insert into public.audit_log(clinic_id, actor_id, actor_role, action, table_name, record_id)
-  values (v_clinic, auth.uid(), auth.user_role(), lower(tg_op), tg_table_name, v_record);
+  values (v_clinic, auth.uid(), public.jwt_role(), lower(tg_op), tg_table_name, v_record);
 
   if tg_op = 'DELETE' then return old; else return new; end if;
 end;

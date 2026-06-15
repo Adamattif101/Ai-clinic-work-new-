@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { DEMO_MODE, demoChapters } from '../../lib/demo';
 
 // Therapist-assigned homework: fixed psychoeducation content the patient
 // navigates like book chapters. STUB.
@@ -11,10 +12,11 @@ interface Chapter {
 }
 
 export default function Homework() {
-  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>(DEMO_MODE ? demoChapters : []);
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
+    if (DEMO_MODE) return;
     supabase
       .from('psychoed_content')
       .select('id, title, body, ordinal')

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../lib/auth';
+import { DEMO_MODE } from '../../lib/demo';
 
 // Patient wellbeing companion (clinic-branded). STUB.
 // Daily self-reported mood check-in (1–5). This is engagement, NOT clinical
@@ -18,6 +19,10 @@ export default function CompanionHome() {
   const [saved, setSaved] = useState(false);
 
   const checkin = async (mood: number) => {
+    if (DEMO_MODE) {
+      setSaved(true);
+      return;
+    }
     // patient_id resolution would map auth user -> patients row; stubbed via RLS.
     const { data: patient } = await supabase
       .from('patients')

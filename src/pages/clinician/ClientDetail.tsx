@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { generateInsight } from '../../lib/api';
 import type { InsightKind, NoteInsight, Patient, SessionNote } from '../../lib/types';
+import { DEMO_MODE, demoPatients, demoNotesByPatient, demoInsight } from '../../lib/demo';
 
 // The notes-to-insight layer (clinician side). Clinician pastes/types notes;
 // the AI produces an administrative draft they review and own.
@@ -23,6 +24,11 @@ export default function ClientDetail() {
 
   const load = async () => {
     if (!id) return;
+    if (DEMO_MODE) {
+      setPatient(demoPatients.find((p) => p.id === id) ?? null);
+      setNotes(demoNotesByPatient[id] ?? []);
+      return;
+    }
     const [{ data: p }, { data: n }] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
       supabase
@@ -43,9 +49,16 @@ export default function ClientDetail() {
   const saveNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !draft.trim()) return;
+    if (DEMO_MODE) {
+      setNotes([
+        { id: `demo-${Date.now()}`, patient_id: id, clinician_id: 'c1', body: draft.trim(), session_date: new Date().toISOString().slice(0, 10) },
+        ...notes,
+      ]);
+      setDraft('');
+      return;
+    }
     const { data: prof } = await supabase.auth.getUser();
     const { error } = await supabase.from('session_notes').insert({
-      // clinic_id is set from the patient row to satisfy RLS check.
       clinic_id: patient?.clinic_id,
       patient_id: id,
       clinician_id: prof.user?.id,
@@ -63,8 +76,12 @@ export default function ClientDetail() {
     setBusy(kind);
     setError(null);
     try {
-      const result = await generateInsight(id, kind);
-      setInsight(result);
+      if (DEMO_MODE) {
+        await new Promise((r) => setTimeout(r, 600)); // simulate generation
+        setInsight({ ...demoInsight(id), kind });
+      } else {
+        setInsight(await generateInsight(id, kind));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
